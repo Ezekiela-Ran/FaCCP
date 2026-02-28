@@ -1,6 +1,6 @@
 from PySide6 import QtWidgets
 
-class BaseWindow(QtWidgets.QWidget):
+class Window(QtWidgets.QWidget):
 
     def __init__(self):
         super().__init__()
@@ -11,5 +11,6 @@ class BaseWindow(QtWidgets.QWidget):
         width = self.screen().size().width()
         self.setWindowTitle(title)
         self.setGeometry(0, 0, width, height)
+        
     
     

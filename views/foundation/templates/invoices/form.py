@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-     QWidget, QLabel, QLineEdit, QGridLayout
+    QWidget, QLabel, QLineEdit, QFormLayout, QHBoxLayout
 )
 
 class FormTemplate(QWidget):
@@ -19,26 +19,26 @@ class FormTemplate(QWidget):
         self.nif_label = QLabel("NIF:")
         self.nif_input = QLineEdit()
 
-        # Layout en grille (2 colonnes)
-        layout = QGridLayout()
+        # Layout principal horizontal (2 colonnes)
+        main_layout = QHBoxLayout()
 
-        layout.setVerticalSpacing(0)
+        # Colonne gauche
+        left_form = QFormLayout()
+        left_form.setSpacing(0)
+        left_form.addRow(self.company_name_label, self.company_name_input)
+        left_form.addRow(self.stat_label, self.stat_input)
 
-        # Colonne 0 : Raison sociale + Statistic
-        layout.addWidget(self.company_name_label, 0, 0)
-        layout.addWidget(self.company_name_input, 1, 0)
+        # Colonne droite
+        right_form = QFormLayout()
+        right_form.setSpacing(0)
+        right_form.addRow(self.responsable_label, self.responsable_input)
+        right_form.addRow(self.nif_label, self.nif_input)
 
-        layout.addWidget(self.stat_label, 2, 0)
-        layout.addWidget(self.stat_input, 3, 0)
+        # Ajouter les deux colonnes côte à côte
+        main_layout.addLayout(left_form)
+        main_layout.addLayout(right_form)
 
-        # Colonne 1 : Responsable + NIF
-        layout.addWidget(self.responsable_label, 0, 1)
-        layout.addWidget(self.responsable_input, 1, 1)
-
-        layout.addWidget(self.nif_label, 2, 1)
-        layout.addWidget(self.nif_input, 3, 1)
-
-        self.setLayout(layout)
+        self.setLayout(main_layout)
         self.setWindowTitle("Formulaire")
 
         # Charger le style depuis input.qss

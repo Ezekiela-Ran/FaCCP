@@ -15,5 +15,5 @@ class HeadLayout(QtWidgets.QWidget):
         self.record = StandardInvoiceRecord()
 
         # Facteur d’étirement
-        self.head_layout.addWidget(self.form,3)
-        self.head_layout.addWidget(self.record,2)
+        self.head_layout.addWidget(self.form,1)
+        self.head_layout.addWidget(self.record,1)

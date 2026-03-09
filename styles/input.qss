@@ -1,0 +1,17 @@
+QLineEdit {
+    font-family: "Comic Sans MS";
+    margin: 0px;
+    padding: 0px;              
+    color: #032429;            
+    background-color: #7AB893;                
+    border: none;
+    height: 2em;
+    border-radius: 2px;
+}
+
+QLabel {
+    margin: 0px;
+    padding: 0px;
+    color: white;            
+}
+

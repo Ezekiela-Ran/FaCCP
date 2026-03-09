@@ -1,4 +1,8 @@
+from views.foundation.templates.invoices.form import FormTemplate
+from PySide6.QtCore import (Qt)
 
-class ProformaInvoiceForm:
+class ProformaInvoiceForm(FormTemplate):
     def __init__(self):
-        pass
+        super().__init__()
+        self.setObjectName("card")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)

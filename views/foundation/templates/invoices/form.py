@@ -23,20 +23,20 @@ class FormTemplate(QWidget):
         main_layout = QHBoxLayout()
 
         # Colonne gauche
-        left_form = QFormLayout()
-        left_form.setSpacing(0)
-        left_form.addRow(self.company_name_label, self.company_name_input)
-        left_form.addRow(self.stat_label, self.stat_input)
+        self.left_form = QFormLayout()
+        self.left_form.setSpacing(0)
+        self.left_form.addRow(self.company_name_label, self.company_name_input)
+        self.left_form.addRow(self.stat_label, self.stat_input)
 
         # Colonne droite
-        right_form = QFormLayout()
-        right_form.setSpacing(0)
-        right_form.addRow(self.responsable_label, self.responsable_input)
-        right_form.addRow(self.nif_label, self.nif_input)
+        self.right_form = QFormLayout()
+        self.right_form.setSpacing(0)
+        self.right_form.addRow(self.responsable_label, self.responsable_input)
+        self.right_form.addRow(self.nif_label, self.nif_input)
 
         # Ajouter les deux colonnes côte à côte
-        main_layout.addLayout(left_form)
-        main_layout.addLayout(right_form)
+        main_layout.addLayout(self.left_form)
+        main_layout.addLayout(self.right_form)
 
         self.setLayout(main_layout)
         self.setWindowTitle("Formulaire")

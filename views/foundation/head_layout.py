@@ -1,8 +1,8 @@
 from PySide6 import QtWidgets
-from views.components.invoices.form.standard import StandardInvoiceForm
-from views.components.invoices.form.proforma import ProformaInvoiceForm
-from views.components.invoices.records.standard import StandardInvoiceRecord
-from views.components.invoices.records.proforma import ProformaInvoiceRecord
+from views.components.standard_invoice.form import StandardInvoiceForm
+from views.components.proforma_invoice.form import ProformaInvoiceForm
+from views.components.standard_invoice.record import StandardInvoiceRecord
+from views.components.proforma_invoice.record import ProformaInvoiceRecord
 
 
 class HeadLayout(QtWidgets.QWidget):

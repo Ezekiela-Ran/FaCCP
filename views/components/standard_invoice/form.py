@@ -1,4 +1,4 @@
-from views.foundation.templates.invoices.form import FormTemplate
+from views.foundation.templates.form import FormTemplate
 from PySide6.QtCore import (Qt)
 from PySide6.QtWidgets import (QLabel, QLineEdit)
 

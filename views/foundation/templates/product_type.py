@@ -15,7 +15,7 @@ class ProductTypeTemplate(QWidget):
         self.pr_label = QLabel("Type de")
         self.p_label = QLabel("Type de")
 
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(self)
 
         layout.addWidget(self.product_type_label)
         layout.addWidget(self.product_label)

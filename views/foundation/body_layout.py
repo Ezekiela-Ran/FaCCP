@@ -9,18 +9,17 @@ class BodyLayout(QtWidgets.QWidget):
         self.setObjectName("card")
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)   
 
-        self.body_layout = QtWidgets.QVBoxLayout(self)
+        self.body_layout = QtWidgets.QHBoxLayout(self)
+        self.setObjectName("card")
         
 
         self.product_type = StandardInvoiceProductType()
         self.product_type.setObjectName("productType")
         self.product_type.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
-
-        self.product_type.setMaximumWidth(400)
         self.products = StandardInvoiceProducts()
 
         self.body_layout.addWidget(self.product_type, 1)
-        self.body_layout.addWidget(self.products, 1)
+        self.body_layout.addWidget(self.products, 3)
 
         with open("styles/product_type.qss", "r") as f:
             self.setStyleSheet(f.read())

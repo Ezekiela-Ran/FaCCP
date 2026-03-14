@@ -10,12 +10,14 @@ class ProductTypeTemplate(QWidget):
 
         # Widgets
         self.product_type_label = QLabel("Type de produit")
-        self.product_type_button = QPushButton("Ajouter")
+        self.product_type_delete_button = QPushButton("Supprimer")
+        self.product_type_add_button = QPushButton("Ajouter")
 
         # Layout horizontal pour l'en-tête
         product_type_head = QHBoxLayout()
         product_type_head.addWidget(self.product_type_label)
-        product_type_head.addWidget(self.product_type_button)
+        product_type_head.addWidget(self.product_type_delete_button)
+        product_type_head.addWidget(self.product_type_add_button)
 
         # Layout vertical principal
         product_type_list = QVBoxLayout()

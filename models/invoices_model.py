@@ -15,3 +15,25 @@ class InvoicesModel:
         data = cursor.fetchall()
         conn.close()
         return data
+    
+    @classmethod
+    def insert(cls, data):
+        """
+        Insert a row into the table.
+        data must be a dictionary.
+        """
+        conn = connection()
+        cursor = conn.cursor()
+        cursor.execute("use invoicing")
+
+        columns = ", ".join(data.keys())
+        placeholders = ", ".join(["%s"] * len(data))
+
+        query = f"""
+        INSERT INTO {cls.table_name} ({columns})
+        VALUES ({placeholders})
+        """
+
+        cursor.execute(query, tuple(data.values()))
+        conn.commit()
+        conn.close()

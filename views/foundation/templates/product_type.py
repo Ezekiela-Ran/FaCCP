@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QFont
 from PySide6.QtCore import Qt
-
+from models.product_type_model import ProductTypeModel
 class ProductTypeTemplate(QWidget):
     def __init__(self):
         super().__init__()
@@ -31,7 +31,7 @@ class ProductTypeTemplate(QWidget):
         self.font = QFont("MS Gothic", weight=QFont.Bold)
 
         # Liste des items à ajouter
-        items = ["Confiserie", "Boisson", "Snack", "Produit laitier"]
+        items = []
 
         # Boucle pour ajouter les items
         for text in items:
@@ -59,6 +59,9 @@ class ProductTypeTemplate(QWidget):
         text, ok = QInputDialog.getText(self, "Nouvel item", "Nom du produit :")
         if ok and text.strip():
             self.add_item(text.strip())
+            ProductTypeModel.insert({
+                "product_type_name": text
+            })
 
     def on_delete_item(self):
         """Supprime l’item sélectionné dans la liste."""

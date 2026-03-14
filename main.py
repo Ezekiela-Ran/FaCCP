@@ -5,6 +5,9 @@ import sys
 from PySide6 import QtWidgets
 from views.foundation.window import Window
 from views.foundation.main_layout import MainLayout
+from models.database.tables import create_table
+
+create_table()
 
 def load_styles(app):
         with open("styles/style.qss", "r") as f:

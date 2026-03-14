@@ -3,8 +3,7 @@ from PySide6 import QtWidgets
 class Window(QtWidgets.QWidget):
     
     """
-        This is the main window of the application.
-        It sets up the window title and its geometry to match the screen size.
+        Voici la fenêtre principale et ses configurations
     """
     def __init__(self):
         super().__init__()
@@ -16,4 +15,3 @@ class Window(QtWidgets.QWidget):
         self.setGeometry(0, 0, width, height)
         self.window_layout = QtWidgets.QVBoxLayout(self)
         self.window_layout.setContentsMargins(0, 0, 0, 0)
-        # self.window_layout.setSpacing(0)

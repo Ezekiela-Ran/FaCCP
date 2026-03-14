@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QListWidgetItem
+    QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QInputDialog,QListWidgetItem
 )
 from PySide6.QtGui import QFont
 from PySide6.QtCore import Qt
@@ -28,16 +28,42 @@ class ProductTypeTemplate(QWidget):
         self.listWidget.setObjectName("listWidget")
 
         # Définition de la police
-        font = QFont("MS Gothic", weight=QFont.Bold)
+        self.font = QFont("MS Gothic", weight=QFont.Bold)
 
-        # Ajout d'un élément centré
-        item = QListWidgetItem("Confiserie")
-        item.setTextAlignment(Qt.AlignCenter)
-        item.setFont(font)
-        self.listWidget.addItem(item)
+        # Liste des items à ajouter
+        items = ["Confiserie", "Boisson", "Snack", "Produit laitier"]
+
+        # Boucle pour ajouter les items
+        for text in items:
+            self.add_item(text)
 
         # Ajout de la liste dans le layout principal
         product_type_list.addWidget(self.listWidget)
 
         # Associer le layout principal au widget
         self.setLayout(product_type_list)
+
+        # Connexion des boutons
+        self.product_type_add_button.clicked.connect(self.on_add_item)
+        self.product_type_delete_button.clicked.connect(self.on_delete_item)
+
+    def add_item(self, text: str):
+        """Ajoute un item formaté dans la liste."""
+        item = QListWidgetItem(text)
+        item.setTextAlignment(Qt.AlignCenter)
+        item.setFont(self.font)
+        self.listWidget.addItem(item)
+
+    def on_add_item(self):
+        """Demande un texte à l’utilisateur et ajoute l’item."""
+        text, ok = QInputDialog.getText(self, "Nouvel item", "Nom du produit :")
+        if ok and text.strip():
+            self.add_item(text.strip())
+
+    def on_delete_item(self):
+        """Supprime l’item sélectionné dans la liste."""
+        selected_items = self.listWidget.selectedItems()
+        if not selected_items:
+            return  # Rien de sélectionné
+        for item in selected_items:
+            self.listWidget.takeItem(self.listWidget.row(item))

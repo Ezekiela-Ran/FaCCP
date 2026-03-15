@@ -70,10 +70,22 @@ class ProductTypeTemplate(QWidget):
                 "product_type_name": text
             })
 
+    def delete_item_from_database(self, product_type_name: str):
+        """Supprime un type de produit de la base."""
+        ProductTypeModel.delete({
+            "product_type_name": product_type_name
+        })
+
     def on_delete_item(self):
-        """Supprime l’item sélectionné dans la liste."""
+        """Supprime l’item sélectionné dans la liste et dans la base."""
         selected_items = self.listWidget.selectedItems()
         if not selected_items:
             return  # Rien de sélectionné
+
         for item in selected_items:
+            text = item.text()
+            # Supprimer de la base
+            self.delete_item_from_database(text)
+            # Supprimer de la liste
             self.listWidget.takeItem(self.listWidget.row(item))
+

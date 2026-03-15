@@ -12,7 +12,6 @@ class InvoicesModel:
         cursor = conn.cursor(dictionary=True)
         cursor.execute("USE invoicing")
         cursor.execute(f"SELECT * FROM {cls.table_name}")
-
         
         data = cursor.fetchall()
         conn.close()
@@ -26,7 +25,7 @@ class InvoicesModel:
         """
         conn = connection()
         cursor = conn.cursor()
-        cursor.execute("use invoicing")
+        cursor.execute("USE invoicing")
 
         columns = ", ".join(data.keys())
         placeholders = ", ".join(["%s"] * len(data))
@@ -37,5 +36,23 @@ class InvoicesModel:
         """
 
         cursor.execute(query, tuple(data.values()))
+        conn.commit()
+        conn.close()
+
+    @classmethod
+    def delete(cls, where):
+        """
+        Delete rows from the table.
+        where must be a dictionary mapping column names to values.
+        Example: {"id": 5} or {"invoice_number": "INV-001"}
+        """
+        conn = connection()
+        cursor = conn.cursor()
+        cursor.execute("USE invoicing")
+
+        conditions = " AND ".join([f"{col} = %s" for col in where.keys()])
+        query = f"DELETE FROM {cls.table_name} WHERE {conditions}"
+
+        cursor.execute(query, tuple(where.values()))
         conn.commit()
         conn.close()

@@ -1,32 +1,28 @@
 from PySide6 import QtWidgets
 
-
 class MenuBar(QtWidgets.QMenuBar):
     def __init__(self, parent):
-        super().__init__(parent)
-        
-        self._initialise_file_menu()
-        self._initialise_theme_menu()
-        
-    def _initialise_file_menu(self):
+        super().__init__(parent)       
+        self.parent = parent
         
         # Menu pour les fichiers
-        file_menu = self.addMenu("Fichier")
-        
-        # Sous-menu pour les nouveaux fichiers
-        new_file_sub_menu = QtWidgets.QMenu("Nouveau")
-        file_menu.addMenu(new_file_sub_menu)
-        
-        # Actions pour les nouveaux fichiers
-        new_file_sub_menu.addAction("Facture")
-        new_file_sub_menu.addAction("Facture proforma")
-        
-    def _initialise_theme_menu(self):
+        self.file_menu = self.addMenu("Fichier")
+        self.new_file_menu = QtWidgets.QMenu("Nouveau")
+        self.file_menu.addMenu(self.new_file_menu)
+
+        # Actions individuelles
+        facture_action = self.new_file_menu.addAction("Facture")
+        facture_action.triggered.connect(lambda: self.parent.menubar_click_standard())
+
+        proforma_action = self.new_file_menu.addAction("Facture proforma")
+        proforma_action.triggered.connect(lambda: self.parent.menubar_click_proforma())
         
         # Menu pour les thèmes
-        theme_menu = self.addMenu("Thème")
-        
-        # Actions pour les thèmes
-        theme_menu.addAction("Clair")
-        theme_menu.addAction("Sombre")
-        
+        self.theme_menu = self.addMenu("Thème")
+        self.theme_menu.addAction("Clair")
+        self.theme_menu.addAction("Sombre")
+        self._apply_styles()
+    
+    def _apply_styles(self): 
+        with open("styles/menu.qss", "r") as f:
+            self.setStyleSheet(f.read())

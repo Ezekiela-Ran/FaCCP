@@ -4,3 +4,7 @@ env/
 
 # Cache de python
 __pycache__/
+
+.python-version
+
+.vscode/

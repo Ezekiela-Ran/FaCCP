@@ -31,15 +31,15 @@ class DatabaseManager(Tables):
         finally:
             cursor.close()
 
-    def delete(self, where):
+    def delete_type(self, type_id: int):
         cursor = self.conn.cursor()
         try:
-            conditions = " AND ".join([f"{col} = %s" for col in where.keys()])
-            query = f"DELETE FROM {self.table_name} WHERE {conditions}"
-            cursor.execute(query, tuple(where.values()))
+            query = "DELETE FROM product_type WHERE id = %s"
+            cursor.execute(query, (type_id,))
             self.conn.commit()
         finally:
             cursor.close()
+
 
     def update(self, data, where):
         cursor = self.conn.cursor()

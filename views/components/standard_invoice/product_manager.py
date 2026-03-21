@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QTableWidget, QAbstractItemView, QLineEdit, QLabel, QInputDialog
+    QListWidgetItem, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QTableWidget, QAbstractItemView, QLineEdit, QLabel, QInputDialog, 
 )
 from PySide6.QtGui import QFont
 from PySide6.QtCore import Qt
@@ -62,8 +62,12 @@ class ProductManager(QWidget):
         self.type_list.clear()
         self.db.table_name = "product_type"
         for row in self.db.fetch_all():
+            tid = row["id"]
             name = row["product_type_name"]
-            self.type_list.addItem(name)
+            item = QListWidgetItem(name)
+            item.setData(Qt.UserRole, tid)  # stocker l'ID
+            self.type_list.addItem(item)
+
 
 
     def add_type(self):
@@ -74,12 +78,15 @@ class ProductManager(QWidget):
             self.load_types()
 
     def del_type(self):
-        if not self.type_list.currentItem():
+        item = self.type_list.currentItem()
+        if not item:
             return
-        tid = int(self.type_list.currentItem().text().split(" - ")[0])
+        tid = item.data(Qt.UserRole)  # récupérer l'ID stocké
         self.db.delete_type(tid)
         self.load_types()
         self.product_table.setRowCount(0)
+
+
 
     def add_product(self):
         if not self.type_list.currentItem():

@@ -40,15 +40,23 @@ class DatabaseManager(Tables):
         finally:
             cursor.close()
 
+    def get_products_by_type(self, type_id):
+        self.cursor.execute("SELECT id, product_name, ref_b_analyse, num_act, physico, toxico, micro, subtotal FROM products WHERE product_type_id=%s", (type_id,))
+        return self.cursor.fetchall()
+    
+    def add_product(self, type_id, product_name, ref="0", num_act="0", physico="0", toxico="0", micro="0", subtotal="0"):
+        self.cursor.execute(
+            "INSERT INTO products (product_type_id, product_name, ref_b_analyse, num_act, physico, toxico, micro, subtotal) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (type_id, product_name, ref, num_act, physico, toxico, micro, subtotal)
+        )
+        self.conn.commit()
+        return self.cursor.lastrowid
+    
+    def update_product(self, product_id, ref, num_act, physico, toxico, micro, subtotal):
+        self.cursor.execute(
+            "UPDATE products SET ref_b_analyse=%s, num_act=%s, physico=%s, toxico=%s, micro=%s, subtotal=%s WHERE id=%s",
+            (ref, num_act, physico, toxico, micro, subtotal, product_id)
+        )
+        self.conn.commit()
 
-    def update(self, data, where):
-        cursor = self.conn.cursor()
-        try:
-            set_clause = ", ".join([f"{col} = %s" for col in data.keys()])
-            conditions = " AND ".join([f"{col} = %s" for col in where.keys()])
-            query = f"UPDATE {self.table_name} SET {set_clause} WHERE {conditions}"
-            values = list(data.values()) + list(where.values())
-            cursor.execute(query, values)
-            self.conn.commit()
-        finally:
-            cursor.close()
+  

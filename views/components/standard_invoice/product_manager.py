@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QListWidgetItem, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QTableWidget, QAbstractItemView, QLineEdit, QLabel, QInputDialog, 
+    QListWidgetItem, QTableWidgetItem, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QTableWidget, QAbstractItemView, QLineEdit, QLabel, QInputDialog, 
 )
 from PySide6.QtGui import QFont
 from PySide6.QtCore import Qt
@@ -10,6 +10,8 @@ class ProductManager(QWidget):
         super().__init__()
         
         self.db = db_manager
+        self.selected_products = {}  # dictionnaire {pid: True/False}
+
 
         # cadre principale
         main_layout = QHBoxLayout()
@@ -18,7 +20,7 @@ class ProductManager(QWidget):
         type_list_layout = QVBoxLayout()
         main_layout.addLayout(type_list_layout, 1)
 
-        self.label= QLabel("Catégorie")
+        self.label = QLabel("Catégorie")
         self.add_type_btn = QPushButton("Ajouter")
         self.del_type_btn = QPushButton("Supprimer")
         self.type_list = QListWidget()
@@ -68,8 +70,6 @@ class ProductManager(QWidget):
             item.setData(Qt.UserRole, tid)  # stocker l'ID
             self.type_list.addItem(item)
 
-
-
     def add_type(self):
         self.db.table_name = "product_type"
         name, ok = QInputDialog.getText(self, "Nouveau Type", "Nom du type:")
@@ -86,20 +86,112 @@ class ProductManager(QWidget):
         self.load_types()
         self.product_table.setRowCount(0)
 
-
-
     def add_product(self):
         if not self.type_list.currentItem():
             return
-        tid = int(self.type_list.currentItem().text().split(" - ")[0])
+        tid = self.type_list.currentItem().data(Qt.UserRole)
         name, ok = QInputDialog.getText(self, "Nouveau Produit", "Nom du produit:")
         if ok and name:
             pid = self.db.add_product(tid, name)
-            self.add_product_row(pid, name, "0", "0", "0")
+            self.add_product_row(pid, name, "0", "0", "0", "0", "0", "0")
+
+    def add_product_row(self, pid, name, ref, num_act, physico, micro, toxico, subtotal):
+        row = self.product_table.rowCount()
+        self.product_table.insertRow(row)
+
+        self.product_table.setItem(row, 0, QTableWidgetItem(name))
+        self.product_table.item(row, 0).setData(Qt.UserRole, pid)
+
+        ref_edit = QLineEdit(str(ref)); ref_edit.setReadOnly(True)
+        num_act_edit = QLineEdit(str(num_act)); num_act_edit.setReadOnly(True)
+        physico_edit = QLineEdit(str(physico)); physico_edit.setReadOnly(True)
+        micro_edit = QLineEdit(str(micro)); micro_edit.setReadOnly(True)
+        toxico_edit = QLineEdit(str(toxico)); toxico_edit.setReadOnly(True)
+        subtotal_edit = QLineEdit(str(subtotal)); subtotal_edit.setReadOnly(True)
+
+        self.product_table.setCellWidget(row, 1, ref_edit)
+        self.product_table.setCellWidget(row, 2, num_act_edit)
+        self.product_table.setCellWidget(row, 3, physico_edit)
+        self.product_table.setCellWidget(row, 4, toxico_edit)
+        self.product_table.setCellWidget(row, 5, micro_edit)
+        self.product_table.setCellWidget(row, 6, subtotal_edit)
+
+        btn_del = QPushButton("Suppr")
+        btn_mod = QPushButton("Modifier")
+        btn_sel = QPushButton("Select")
+
+        self.product_table.setCellWidget(row, 7, btn_del)
+        self.product_table.setCellWidget(row, 8, btn_mod)
+        self.product_table.setCellWidget(row, 9, btn_sel)
+
+        btn_del.clicked.connect(lambda: self.db.delete_product(pid) or self.product_table.removeRow(row))
+        btn_mod.clicked.connect(lambda: self.toggle_edit(row))
+        btn_sel.clicked.connect(lambda: self.toggle_select(pid, row))
+
+        # Réappliquer style si déjà sélectionné
+        if pid in self.selected_products and self.selected_products[pid]:
+            btn_sel.setText("Annuler")
+            self.apply_selection_style(row)
+
+    def toggle_edit(self, row):
+        widget = self.product_table.cellWidget(row, 1)
+        btn = self.product_table.cellWidget(row, 8)
+        if widget.isReadOnly():
+            # Start edit
+            btn.setText("Sauver")
+            for col in [1, 2, 3, 4, 5, 6]:
+                self.product_table.cellWidget(row, col).setReadOnly(False)
+            self.product_table.cellWidget(row, 1).setFocus()
+        else:
+            # Save edit
+            btn.setText("Modifier")
+            pid = self.product_table.item(row, 0).data(Qt.UserRole)
+            ref = self.product_table.cellWidget(row, 1).text()
+            num_act = self.product_table.cellWidget(row, 2).text()
+            physico = self.product_table.cellWidget(row, 3).text()
+            toxico = self.product_table.cellWidget(row, 4).text()
+            micro = self.product_table.cellWidget(row, 5).text()
+            subtotal = self.product_table.cellWidget(row, 6).text()
+            self.db.update_product(pid, ref, num_act, physico, toxico, micro, subtotal)
+            for col in [1, 2, 3, 4, 5, 6]:
+                self.product_table.cellWidget(row, col).setReadOnly(True)
+
+    def toggle_select(self, pid, row):
+        btn = self.product_table.cellWidget(row, 9)
+        if btn.text() == "Select":
+            btn.setText("Annuler")
+            self.selected_products[pid] = True
+            self.apply_selection_style(row)
+        else:
+            btn.setText("Select")
+            self.selected_products[pid] = False
+            self.clear_selection_style(row)
+
+    def apply_selection_style(self, row):
+        for col in range(self.product_table.columnCount()):
+            item = self.product_table.item(row, col)
+            if item:
+                item.setBackground(Qt.green)
+        for col in [1, 2, 3, 4, 5, 6]:
+            widget = self.product_table.cellWidget(row, col)
+            widget.setStyleSheet("background-color: lightgreen; border: 1px solid green;")
+
+    def clear_selection_style(self, row):
+        for col in range(self.product_table.columnCount()):
+            item = self.product_table.item(row, col)
+            if item:
+                item.setBackground(Qt.white)
+        for col in [1, 2, 3, 4, 5, 6]:
+            widget = self.product_table.cellWidget(row, col)
+            widget.setStyleSheet("")
 
     def del_product(self):
-        if self.product_table.currentRow() >= 0:
-            self.product_table.removeRow(self.product_table.currentRow())
+        row = self.product_table.currentRow()
+        if row >= 0:
+            item = self.product_table.item(row, 0)
+            pid = item.data(Qt.UserRole)
+            self.db.delete_product(pid)
+            self.product_table.removeRow(row)
 
     def save_products(self):
         # Envoyer uniquement les produits sélectionnés
@@ -108,11 +200,10 @@ class ProductManager(QWidget):
         # Faire un INSERT dans une table de commandes ou autre logique
 
     def load_products(self):
-        pass
-        # self.product_table.setRowCount(0)
-        # if not self.type_list.currentItem():
-        #     return
-        # tid = int(self.type_list.currentItem().text().split(" - ")[0])
-        # for pid, name, ref, qual, price in self.db.get_products_by_type(tid):
-        #     self.add_product_row(pid, name, ref, qual, price)
+        self.product_table.setRowCount(0)
+        if not self.type_list.currentItem():
+            return
+        tid = self.type_list.currentItem().data(Qt.UserRole)
+        for pid, name, ref, num_act, physico, toxico, micro, subtotal in self.db.get_products_by_type(tid):
+            self.add_product_row(pid, name, ref, num_act, physico, toxico, micro, subtotal)
 

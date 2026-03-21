@@ -59,12 +59,18 @@ class ProductManager(QWidget):
     def load_types(self):
         self.type_list.clear()
         self.db.table_name = "product_type"
-        for row in self.db.fetch_all():
-            tid = row["id"]
-            name = row["product_type_name"]
-            item = QListWidgetItem(name)
-            item.setData(Qt.UserRole, tid)  # stocker l'ID
+        types = self.db.fetch_all()
+        if not types:
+            item = QListWidgetItem("Aucune catégorie disponible")
+            item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
             self.type_list.addItem(item)
+        else:
+            for row in types:
+                tid = row["id"]
+                name = row["product_type_name"]
+                item = QListWidgetItem(name)
+                item.setData(Qt.UserRole, tid)  # stocker l'ID
+                self.type_list.addItem(item)
 
     def add_type(self):
         self.db.table_name = "product_type"
@@ -199,10 +205,12 @@ class ProductManager(QWidget):
             btn.setText("Annuler")
             self.selected_products[pid] = True
             self.apply_selection_style(row)
+            self.disable_form_fields()
         else:
             btn.setText("Select")
             self.selected_products[pid] = False
             self.clear_selection_style(row)
+            self.enable_form_fields()
         self.selection_changed.emit()  # Émettre le signal
 
     def apply_selection_style(self, row):
@@ -226,23 +234,68 @@ class ProductManager(QWidget):
     # Le bouton de suppression global de la liste de produits a été supprimé de l'UI.
     # La suppression se fait via le bouton "Suppr" de chaque ligne dans la table.
 
-    def clear_selection(self):
-        for pid in list(self.selected_products.keys()):
-            self.selected_products[pid] = False
-            # Trouver la ligne correspondante et mettre à jour l'affichage
+    def disable_form_fields(self):
+        # Accéder au formulaire
+        main_layout = self.parent().parent()
+        if hasattr(main_layout, 'head_layout') and hasattr(main_layout.head_layout, 'form'):
+            form = main_layout.head_layout.form
+            form.company_name_input.setEnabled(False)
+            form.responsable_input.setEnabled(False)
+            form.stat_input.setEnabled(False)
+            form.nif_input.setEnabled(False)
+            if hasattr(form, 'date_issue_input'):
+                form.date_issue_input.setEnabled(False)
+            if hasattr(form, 'date_result_input'):
+                form.date_result_input.setEnabled(False)
+            if hasattr(form, 'product_ref_input'):
+                form.product_ref_input.setEnabled(False)
+            if hasattr(form, 'date_input'):
+                form.date_input.setEnabled(False)
+
+    def enable_form_fields(self):
+        # Accéder au formulaire
+        main_layout = self.parent().parent()
+        if hasattr(main_layout, 'head_layout') and hasattr(main_layout.head_layout, 'form'):
+            form = main_layout.head_layout.form
+            form.company_name_input.setEnabled(True)
+            form.responsable_input.setEnabled(True)
+            form.stat_input.setEnabled(True)
+            form.nif_input.setEnabled(True)
+            if hasattr(form, 'date_issue_input'):
+                form.date_issue_input.setEnabled(True)
+            if hasattr(form, 'date_result_input'):
+                form.date_result_input.setEnabled(True)
+            if hasattr(form, 'product_ref_input'):
+                form.product_ref_input.setEnabled(True)
+            if hasattr(form, 'date_input'):
+                form.date_input.setEnabled(True)
+
+    def select_products(self, product_ids):
+        for pid in product_ids:
+            self.selected_products[pid] = True
+            # Trouver la ligne et appliquer la sélection
             for row in range(self.product_table.rowCount()):
                 item_pid = self.product_table.item(row, 0).data(Qt.UserRole)
                 if item_pid == pid:
-                    self.clear_selection_style(row)
                     btn = self.product_table.cellWidget(row, 9)
-                    btn.setText("Select")
+                    btn.setText("Annuler")
+                    self.apply_selection_style(row)
                     break
+        self.disable_form_fields() if product_ids else None
 
     def load_products(self):
         self.product_table.setRowCount(0)
         if not self.type_list.currentItem():
             return
         tid = self.type_list.currentItem().data(Qt.UserRole)
-        for pid, name, ref, num_act, physico, toxico, micro, subtotal in self.db.get_products_by_type(tid):
-            self.add_product_row(pid, name, ref, num_act, physico, toxico, micro, subtotal)
+        products = self.db.get_products_by_type(tid)
+        if not products:
+            self.product_table.insertRow(0)
+            item = QTableWidgetItem("Aucun produit disponible pour cette catégorie")
+            item.setTextAlignment(Qt.AlignCenter)
+            self.product_table.setItem(0, 0, item)
+            self.product_table.setSpan(0, 0, 1, self.product_table.columnCount())
+        else:
+            for pid, name, ref, num_act, physico, toxico, micro, subtotal in products:
+                self.add_product_row(pid, name, ref, num_act, physico, toxico, micro, subtotal)
 

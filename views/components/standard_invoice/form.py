@@ -1,5 +1,5 @@
 from views.foundation.templates.form import FormTemplate
-from PySide6.QtCore import (Qt)
+from PySide6.QtCore import (Qt, QDate)
 from PySide6.QtWidgets import (QLabel, QLineEdit, QDateEdit)
 
 
@@ -16,10 +16,12 @@ class StandardInvoiceForm(FormTemplate):
         self.date_issue_label = QLabel("Date d'émission:")
         self.date_issue_input = QDateEdit()
         self.date_issue_input.setCalendarPopup(True)
+        self.date_issue_input.setDate(QDate.currentDate())
 
         self.date_result_label = QLabel("Date de résultat:")
         self.date_result_input = QDateEdit()
         self.date_result_input.setCalendarPopup(True)
+        self.date_result_input.setDate(QDate.currentDate())
 
         self.standard_invoice_number = QLabel("N° facture:")
         

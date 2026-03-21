@@ -1,5 +1,5 @@
 from views.foundation.templates.form import FormTemplate
-from PySide6.QtCore import (Qt)
+from PySide6.QtCore import (Qt, QDate)
 from PySide6.QtWidgets import (QLabel, QLineEdit, QDateEdit)
 
 class ProformaInvoiceForm(FormTemplate):
@@ -11,6 +11,7 @@ class ProformaInvoiceForm(FormTemplate):
         self.date_label = QLabel("Date:")
         self.date_input = QDateEdit()
         self.date_input.setCalendarPopup(True)
+        self.date_input.setDate(QDate.currentDate())
 
     
         self.proforma_invoice_number_label = QLabel("N° Facture proforma")

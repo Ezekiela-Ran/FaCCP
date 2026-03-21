@@ -21,7 +21,7 @@ class BodyLayout(QtWidgets.QWidget):
         self.product_manager.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         # Label pour le total
-        self.net_a_payer_label = QtWidgets.QLabel("Net à payer: 0.00")
+        self.net_a_payer_label = QtWidgets.QLabel("Net à payer: 0.00 Ariary (ZERO ARIARY)")
         self.net_a_payer_label.setAlignment(Qt.AlignCenter)
         self.net_a_payer_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #000000; background-color: #FFFFCC; padding: 4px; border: 1px solid #999999; border-radius: 4px;")
 
@@ -29,11 +29,16 @@ class BodyLayout(QtWidgets.QWidget):
         self.save_button = QtWidgets.QPushButton("Enregistrer")
         self.save_button.setStyleSheet("QPushButton { background-color: #1F4E79; color: white; padding: 10px; border: none; border-radius: 5px; } QPushButton:hover { background-color: #163D62; }")
 
-        # Layout pour le total et le bouton
+        # Bouton imprimer
+        self.print_button = QtWidgets.QPushButton("Imprimer")
+        self.print_button.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; padding: 10px; border: none; border-radius: 5px; } QPushButton:hover { background-color: #45a049; }")
+
+        # Layout pour le total et les boutons
         bottom_layout = QtWidgets.QHBoxLayout()
         bottom_layout.addWidget(self.net_a_payer_label)
         bottom_layout.addStretch()
         bottom_layout.addWidget(self.save_button)
+        bottom_layout.addWidget(self.print_button)
 
         self.body_layout.addWidget(self.product_manager)
         self.body_layout.addLayout(bottom_layout)
@@ -46,6 +51,41 @@ class BodyLayout(QtWidgets.QWidget):
 
         # Chargement du style QSS
         self._apply_stylesheet("styles/product_type.qss")
+
+    def number_to_words(self, number):
+        # Simple number to words in French
+        units = ["", "UN", "DEUX", "TROIS", "QUATRE", "CINQ", "SIX", "SEPT", "HUIT", "NEUF", "DIX", "ONZE", "DOUZE", "TREIZE", "QUATORZE", "QUINZE", "SEIZE", "DIX-SEPT", "DIX-HUIT", "DIX-NEUF"]
+        tens = ["", "", "VINGT", "TRENTE", "QUARANTE", "CINQUANTE", "SOIXANTE", "SOIXANTE-DIX", "QUATRE-VINGT", "QUATRE-VINGT-DIX"]
+        
+        if number == 0:
+            return "ZERO"
+        
+        words = []
+        if number >= 1000000:
+            millions = number // 1000000
+            words.append(self.number_to_words(millions) + " MILLION")
+            number %= 1000000
+        if number >= 1000:
+            thousands = number // 1000
+            words.append(self.number_to_words(thousands) + " MILLE")
+            number %= 1000
+        if number >= 100:
+            hundreds = number // 100
+            if hundreds == 1:
+                words.append("CENT")
+            else:
+                words.append(units[hundreds] + " CENT")
+            number %= 100
+        if number >= 20:
+            ten = number // 10
+            words.append(tens[ten])
+            number %= 10
+            if number > 0:
+                words.append(units[number])
+        elif number > 0:
+            words.append(units[number])
+        
+        return " ".join(words).strip()
 
     def save_invoice(self):
         # Accéder au head_layout pour récupérer les données du formulaire
@@ -142,11 +182,12 @@ class BodyLayout(QtWidgets.QWidget):
         self.product_manager.clear_selection()
         
         # Remettre le total à 0
-        self.net_a_payer_label.setText("Net à payer: 0.00")
+        self.net_a_payer_label.setText("Net à payer: 0.00 Ariary (ZERO ARIARY)")
 
     def update_total_display(self):
         total = self.calculate_total()
-        self.net_a_payer_label.setText(f"Net à payer: {total:.2f}")
+        total_words = self.number_to_words(int(total)) + " ARIARY"
+        self.net_a_payer_label.setText(f"Net à payer: {total:.2f} Ariary ({total_words})")
 
     def _apply_stylesheet(self, path: str):
         """Charge et applique une feuille de style QSS depuis un fichier."""

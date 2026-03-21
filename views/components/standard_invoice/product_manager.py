@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QListWidgetItem, QTableWidgetItem, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QTableWidget, QAbstractItemView, QLineEdit, QLabel, QInputDialog, 
 )
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QIntValidator
 from PySide6.QtCore import Qt, Signal
 
 
@@ -110,6 +110,15 @@ class ProductManager(QWidget):
         micro_edit = QLineEdit(str(micro)); micro_edit.setReadOnly(True)
         toxico_edit = QLineEdit(str(toxico)); toxico_edit.setReadOnly(True)
         subtotal_edit = QLineEdit(str(subtotal)); subtotal_edit.setReadOnly(True)
+
+        # Set validators for integer fields
+        int_validator = QIntValidator(0, 999999)  # Allow 0 to large number
+        physico_edit.setValidator(int_validator)
+        toxico_edit.setValidator(int_validator)
+        micro_edit.setValidator(int_validator)
+        ref_edit.setValidator(int_validator)
+        num_act_edit.setValidator(int_validator)
+        subtotal_edit.setValidator(int_validator)
 
         self.product_table.setCellWidget(row, 1, ref_edit)
         self.product_table.setCellWidget(row, 2, num_act_edit)
@@ -296,6 +305,31 @@ class ProductManager(QWidget):
             self.product_table.setItem(0, 0, item)
             self.product_table.setSpan(0, 0, 1, self.product_table.columnCount())
         else:
-            for pid, name, ref, num_act, physico, toxico, micro, subtotal in products:
+            for product in products:
+                pid = product['id']
+                name = product['product_name']
+                ref = product['ref_b_analyse']
+                num_act = product['num_act']
+                physico = product['physico']
+                toxico = product['toxico']
+                micro = product['micro']
+                subtotal = product['subtotal']
                 self.add_product_row(pid, name, ref, num_act, physico, toxico, micro, subtotal)
+
+    def clear_selection(self):
+        # Désélectionner tous les produits sélectionnés
+        for pid, selected in list(self.selected_products.items()):
+            if selected:
+                # Trouver la ligne correspondante
+                for row in range(self.product_table.rowCount()):
+                    item_pid = self.product_table.item(row, 0)
+                    if item_pid and item_pid.data(Qt.UserRole) == pid:
+                        btn = self.product_table.cellWidget(row, 9)
+                        if btn:
+                            btn.setText("Select")
+                        self.selected_products[pid] = False
+                        self.clear_selection_style(row)
+                        break
+        self.enable_form_fields()
+        self.selection_changed.emit()
 

@@ -19,6 +19,9 @@ class FormTemplate(QWidget):
         self.nif_label = QLabel("NIF:")
         self.nif_input = QLineEdit()
 
+        self.address_label = QLabel("Adresse:")
+        self.address_input = QLineEdit()
+
         # Layout principal horizontal (2 colonnes)
         main_layout = QHBoxLayout()
 
@@ -27,6 +30,7 @@ class FormTemplate(QWidget):
         self.left_form.setSpacing(0)
         self.left_form.addRow(self.company_name_label, self.company_name_input)
         self.left_form.addRow(self.stat_label, self.stat_input)
+        self.left_form.addRow(self.address_label, self.address_input)
 
         # Colonne droite
         self.right_form = QFormLayout()

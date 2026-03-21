@@ -26,6 +26,7 @@ class StandardInvoiceRecord(QtWidgets.QWidget):
             form.company_name_input.setText(invoice['company_name'] or '')
             form.stat_input.setText(invoice['stat'] or '')
             form.nif_input.setText(invoice['nif'] or '')
+            form.address_input.setText(invoice['address'] or '')
             form.responsable_input.setText(invoice['resp'] or '')
             if hasattr(form, 'date_issue_input') and invoice['date_issue']:
                 form.date_issue_input.setDate(QDate.fromString(str(invoice['date_issue']), "yyyy-MM-dd"))
@@ -33,6 +34,10 @@ class StandardInvoiceRecord(QtWidgets.QWidget):
                 form.date_result_input.setDate(QDate.fromString(str(invoice['date_result']), "yyyy-MM-dd"))
             if hasattr(form, 'product_ref_input'):
                 form.product_ref_input.setText(invoice['product_ref'] or '')
+            
+            # Afficher le numéro de facture
+            if hasattr(form, 'standard_invoice_number'):
+                form.standard_invoice_number.setText(f"N° facture: {invoice['id']}")
             
             # Sélectionner les produits
             selected_products = self.standardinvoice.get_invoice_items(invoice_id, 'standard')

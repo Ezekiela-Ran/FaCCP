@@ -1,5 +1,6 @@
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt, QDate
+from PySide6.QtWidgets import QMessageBox
 from views.components.standard_invoice.product_manager import ProductManager
 from models.database_manager import DatabaseManager
 
@@ -94,10 +95,29 @@ class BodyLayout(QtWidgets.QWidget):
             form = main_layout.head_layout.form
             
             # Récupérer les données du formulaire
-            company_name = form.company_name_input.text()
-            responsable = form.responsable_input.text()
+            company_name = form.company_name_input.text().strip()
+            responsable = form.responsable_input.text().strip()
             stat = form.stat_input.text()
             nif = form.nif_input.text()
+            
+            # Validation
+            errors = []
+            if not company_name:
+                errors.append("Raison sociale est obligatoire")
+            if not responsable:
+                errors.append("Responsable est obligatoire")
+            selected_products = [pid for pid, sel in self.product_manager.selected_products.items() if sel]
+            if not selected_products:
+                errors.append("Au moins un produit doit être sélectionné")
+            
+            if errors:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setWindowTitle("Erreur de validation")
+                msg.setText("L'enregistrement ne peut pas être effectué pour les raisons suivantes:")
+                msg.setDetailedText("\n".join(errors))
+                msg.exec()
+                return
             
             # Récupérer les données spécifiques selon le type
             from views.foundation.globals import GlobalVariable
@@ -114,7 +134,7 @@ class BodyLayout(QtWidgets.QWidget):
                     product_ref = form.product_ref_input.text()
                 else:
                     product_ref = ""
-                address = ""  # Pas dans le formulaire actuel
+                address = form.address_input.text()
                 
                 # Calculer le total
                 total = self.calculate_total()
@@ -124,6 +144,10 @@ class BodyLayout(QtWidgets.QWidget):
                 invoice_id = self.product_manager.db.save_standard_invoice(
                     company_name, stat, nif, address, date_issue, date_result, product_ref, responsable, total, selected_products
                 )
+                
+                # Afficher le numéro de facture
+                if hasattr(form, 'standard_invoice_number'):
+                    form.standard_invoice_number.setText(f"N° facture: {invoice_id}")
                 
             elif GlobalVariable.invoice_type == "proforma":
                 if hasattr(form, 'date_input'):
@@ -139,6 +163,13 @@ class BodyLayout(QtWidgets.QWidget):
                 invoice_id = self.product_manager.db.save_proforma_invoice(
                     company_name, nif, stat, date, responsable, total, selected_products
                 )
+            
+            # Afficher popup de confirmation
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setWindowTitle("Enregistrement réussi")
+            msg.setText(f"Enregistrement effectué avec succès.\nNuméro de facture: {invoice_id}")
+            msg.exec()
             
             # Mettre à jour l'affichage des records
             if hasattr(main_layout.head_layout, 'record'):
@@ -168,6 +199,7 @@ class BodyLayout(QtWidgets.QWidget):
             form.responsable_input.clear()
             form.stat_input.clear()
             form.nif_input.clear()
+            form.address_input.clear()
             
             if hasattr(form, 'date_issue_input'):
                 form.date_issue_input.setDate(QDate.currentDate())

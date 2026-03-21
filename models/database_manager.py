@@ -103,11 +103,12 @@ class DatabaseManager(Tables):
         # Insérer les produits sélectionnés
         for product_id in selected_products:
             product = self.get_product_by_id(product_id)
-            item_total = float(product['subtotal'] or 0)
-            self.cursor.execute(
-                "INSERT INTO invoice_client (invoice_id, invoice_type, product_id, physico, micro, toxico, subtotal, total) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                (invoice_id, 'standard', product_id, product['physico'], product['micro'], product['toxico'], product['subtotal'], item_total)
-            )
+            if product:
+                item_total = float(product['subtotal'] or 0)
+                self.cursor.execute(
+                    "INSERT INTO invoice_client (invoice_id, invoice_type, product_id, physico, micro, toxico, subtotal, total) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (invoice_id, 'standard', product_id, product['physico'], product['micro'], product['toxico'], product['subtotal'], item_total)
+                )
         
         self.conn.commit()
         return invoice_id
@@ -123,11 +124,12 @@ class DatabaseManager(Tables):
         # Insérer les produits sélectionnés
         for product_id in selected_products:
             product = self.get_product_by_id(product_id)
-            item_total = float(product['subtotal'] or 0)
-            self.cursor.execute(
-                "INSERT INTO invoice_client (invoice_id, invoice_type, product_id, physico, micro, toxico, subtotal, total) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                (invoice_id, 'proforma', product_id, product['physico'], product['micro'], product['toxico'], product['subtotal'], item_total)
-            )
+            if product:
+                item_total = float(product['subtotal'] or 0)
+                self.cursor.execute(
+                    "INSERT INTO invoice_client (invoice_id, invoice_type, product_id, physico, micro, toxico, subtotal, total) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (invoice_id, 'proforma', product_id, product['physico'], product['micro'], product['toxico'], product['subtotal'], item_total)
+                )
         
         self.conn.commit()
         return invoice_id
@@ -142,11 +144,13 @@ class DatabaseManager(Tables):
     
     def get_standard_invoices(self):
         self.cursor.execute("SELECT id, company_name, address, date_issue, date_result, product_ref, resp, total FROM standard_invoice ORDER BY created_at DESC")
-        return self.cursor.fetchall()
+        results = self.cursor.fetchall()
+        return [tuple(d.values()) for d in results]
     
     def get_proforma_invoices(self):
         self.cursor.execute("SELECT id, company_name, date, resp, total FROM proforma_invoice ORDER BY created_at DESC")
-        return self.cursor.fetchall()
+        results = self.cursor.fetchall()
+        return [tuple(d.values()) for d in results]
     
     def get_invoice_items(self, invoice_id, invoice_type):
         self.cursor.execute("SELECT product_id FROM invoice_client WHERE invoice_id=%s AND invoice_type=%s", (invoice_id, invoice_type))

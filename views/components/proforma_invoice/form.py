@@ -20,3 +20,7 @@ class ProformaInvoiceForm(FormTemplate):
 
         self.right_form.addRow(self.date_label, self.date_input)
         self.left_form.addRow(self.proforma_invoice_number_label, self.proforma_invoice_number)
+
+        # Hide address fields for proforma
+        self.address_label.hide()
+        self.address_input.hide()

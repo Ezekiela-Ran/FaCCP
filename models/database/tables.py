@@ -4,7 +4,7 @@ import mysql.connector
 class Tables:
     def __init__(self):
         self.conn = mysql.connector.connect(**DB_CONFIG)
-        self.cursor = self.conn.cursor()
+        self.cursor = self.conn.cursor(dictionary=True)
         self.cursor.execute("CREATE DATABASE IF NOT EXISTS invoicing")
         self.cursor.execute("USE invoicing")
 

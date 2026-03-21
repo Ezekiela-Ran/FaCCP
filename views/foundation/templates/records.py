@@ -9,7 +9,7 @@ class ListRecordTemplate(QTableWidget):
         self.data = data or []
         self._setup_table()
         self._add_row()
-
+        self.itemDoubleClicked.connect(self.on_item_double_clicked)
 
     def _setup_table(self):
         # Nombre de colonnes dynamique
@@ -35,3 +35,14 @@ class ListRecordTemplate(QTableWidget):
             self.insertRow(row_position)
             for column, value in enumerate(row_data):
                 self.setItem(row_position, column, QTableWidgetItem(str(value)))
+
+    def on_item_double_clicked(self, item):
+        row = item.row()
+        if hasattr(self.parent(), 'load_invoice_data'):
+            invoice_id = self.item(row, 0).text()
+            self.parent().load_invoice_data(invoice_id)
+
+    def update_data(self, new_data):
+        self.data = new_data
+        self.setRowCount(0)
+        self._add_row()

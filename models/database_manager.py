@@ -1,4 +1,5 @@
 from models.database.tables import Tables
+import mysql.connector
 
 class DatabaseManager(Tables):
     table_name = ""
@@ -11,8 +12,36 @@ class DatabaseManager(Tables):
             db.standard_invoice_table()
             db.product_type_table()
             db.products_table()
+            db.invoice_client_table()
+            db.migrate_tables()  # Ajouter les colonnes manquantes
         finally:
             db.close()
+
+    def migrate_tables(self):
+        # Migration pour ajouter les colonnes manquantes si elles n'existent pas
+        try:
+            self.cursor.execute("ALTER TABLE standard_invoice ADD COLUMN total DECIMAL(10,2) DEFAULT 0")
+        except mysql.connector.Error as e:
+            if e.errno not in (1060, 1061):  # Column already exists or duplicate key
+                raise
+        
+        try:
+            self.cursor.execute("ALTER TABLE proforma_invoice ADD COLUMN total DECIMAL(10,2) DEFAULT 0")
+        except mysql.connector.Error as e:
+            if e.errno not in (1060, 1061):  # Column already exists or duplicate key
+                raise
+        
+        try:
+            self.cursor.execute("ALTER TABLE standard_invoice ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        except mysql.connector.Error as e:
+            if e.errno not in (1060, 1061):  # Column already exists or duplicate key
+                raise
+        
+        try:
+            self.cursor.execute("ALTER TABLE proforma_invoice ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        except mysql.connector.Error as e:
+            if e.errno not in (1060, 1061):  # Column already exists or duplicate key
+                raise
 
     def fetch_all(self):
         cursor = self.conn.cursor(dictionary=True)
@@ -62,5 +91,73 @@ class DatabaseManager(Tables):
             (ref, num_act, physico, toxico, micro, subtotal, product_id)
         )
         self.conn.commit()
+    
+    def save_standard_invoice(self, company_name, stat, nif, address, date_issue, date_result, product_ref, resp, total, selected_products):
+        # Insérer la facture
+        self.cursor.execute(
+            "INSERT INTO standard_invoice (company_name, stat, nif, address, date_issue, date_result, product_ref, resp, total) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (company_name, stat, nif, address, date_issue, date_result, product_ref, resp, total)
+        )
+        invoice_id = self.cursor.lastrowid
+        
+        # Insérer les produits sélectionnés
+        for product_id in selected_products:
+            product = self.get_product_by_id(product_id)
+            item_total = float(product['subtotal'] or 0)
+            self.cursor.execute(
+                "INSERT INTO invoice_client (invoice_id, invoice_type, product_id, physico, micro, toxico, subtotal, total) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (invoice_id, 'standard', product_id, product['physico'], product['micro'], product['toxico'], product['subtotal'], item_total)
+            )
+        
+        self.conn.commit()
+        return invoice_id
+    
+    def save_proforma_invoice(self, company_name, nif, stat, date, resp, total, selected_products):
+        # Insérer la facture
+        self.cursor.execute(
+            "INSERT INTO proforma_invoice (company_name, nif, stat, date, resp, total) VALUES (%s, %s, %s, %s, %s, %s)",
+            (company_name, nif, stat, date, resp, total)
+        )
+        invoice_id = self.cursor.lastrowid
+        
+        # Insérer les produits sélectionnés
+        for product_id in selected_products:
+            product = self.get_product_by_id(product_id)
+            item_total = float(product['subtotal'] or 0)
+            self.cursor.execute(
+                "INSERT INTO invoice_client (invoice_id, invoice_type, product_id, physico, micro, toxico, subtotal, total) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (invoice_id, 'proforma', product_id, product['physico'], product['micro'], product['toxico'], product['subtotal'], item_total)
+            )
+        
+        self.conn.commit()
+        return invoice_id
+    
+    def get_product_by_id(self, product_id):
+        cursor = self.conn.cursor(dictionary=True)
+        try:
+            cursor.execute("SELECT physico, micro, toxico, subtotal FROM products WHERE id=%s", (product_id,))
+            return cursor.fetchone()
+        finally:
+            cursor.close()
+    
+    def get_standard_invoices(self):
+        self.cursor.execute("SELECT id, company_name, address, date_issue, date_result, product_ref, resp, total FROM standard_invoice ORDER BY created_at DESC")
+        return self.cursor.fetchall()
+    
+    def get_proforma_invoices(self):
+        self.cursor.execute("SELECT id, company_name, date, resp, total FROM proforma_invoice ORDER BY created_at DESC")
+        return self.cursor.fetchall()
+    
+    def get_invoice_items(self, invoice_id, invoice_type):
+        self.cursor.execute("SELECT product_id FROM invoice_client WHERE invoice_id=%s AND invoice_type=%s", (invoice_id, invoice_type))
+        return [row['product_id'] for row in self.cursor.fetchall()]
+    
+    def get_standard_invoice_by_id(self, invoice_id):
+        self.cursor.execute("SELECT * FROM standard_invoice WHERE id=%s", (invoice_id,))
+        return self.cursor.fetchone()
+    
+    def get_proforma_invoice_by_id(self, invoice_id):
+        self.cursor.execute("SELECT * FROM proforma_invoice WHERE id=%s", (invoice_id,))
+        return self.cursor.fetchone()
 
   

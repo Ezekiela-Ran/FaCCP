@@ -2,10 +2,12 @@ from PySide6.QtWidgets import (
     QListWidgetItem, QTableWidgetItem, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QTableWidget, QAbstractItemView, QLineEdit, QLabel, QInputDialog, 
 )
 from PySide6.QtGui import QFont
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 
 
 class ProductManager(QWidget):
+    selection_changed = Signal()  # Signal émis quand la sélection change
+    
     def __init__(self, db_manager):
         super().__init__()
         
@@ -35,7 +37,6 @@ class ProductManager(QWidget):
         main_layout.addLayout(product_list_layout, 3)
 
         self.add_product_btn = QPushButton("Ajouter")
-        self.save_btn = QPushButton("Enregistrer")
 
         self.product_table = QTableWidget()
         self.product_table.setColumnCount(10)
@@ -44,7 +45,6 @@ class ProductManager(QWidget):
 
         product_list_layout.addWidget(self.add_product_btn)
         product_list_layout.addWidget(self.product_table)
-        product_list_layout.addWidget(self.save_btn)
 
         self.setLayout(main_layout)
 
@@ -52,7 +52,6 @@ class ProductManager(QWidget):
         self.add_type_btn.clicked.connect(self.add_type)
         self.del_type_btn.clicked.connect(self.del_type)
         self.add_product_btn.clicked.connect(self.add_product)
-        self.save_btn.clicked.connect(self.save_products)
         self.type_list.itemSelectionChanged.connect(self.load_products)
 
         self.load_types()
@@ -204,6 +203,7 @@ class ProductManager(QWidget):
             btn.setText("Select")
             self.selected_products[pid] = False
             self.clear_selection_style(row)
+        self.selection_changed.emit()  # Émettre le signal
 
     def apply_selection_style(self, row):
         for col in range(self.product_table.columnCount()):
@@ -226,11 +226,17 @@ class ProductManager(QWidget):
     # Le bouton de suppression global de la liste de produits a été supprimé de l'UI.
     # La suppression se fait via le bouton "Suppr" de chaque ligne dans la table.
 
-    def save_products(self):
-        # Envoyer uniquement les produits sélectionnés
-        selected_ids = [pid for pid, sel in self.selected_products.items() if sel]
-        print("Produits sélectionnés à enregistrer:", selected_ids)
-        # Faire un INSERT dans une table de commandes ou autre logique
+    def clear_selection(self):
+        for pid in list(self.selected_products.keys()):
+            self.selected_products[pid] = False
+            # Trouver la ligne correspondante et mettre à jour l'affichage
+            for row in range(self.product_table.rowCount()):
+                item_pid = self.product_table.item(row, 0).data(Qt.UserRole)
+                if item_pid == pid:
+                    self.clear_selection_style(row)
+                    btn = self.product_table.cellWidget(row, 9)
+                    btn.setText("Select")
+                    break
 
     def load_products(self):
         self.product_table.setRowCount(0)

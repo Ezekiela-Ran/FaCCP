@@ -1,8 +1,7 @@
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
-from views.components.standard_invoice.products import StandardInvoiceProducts
-from views.components.proforma_invoice.products import ProformaInvoiceProducts
-from views.components.product_type import ProductType
+from views.components.standard_invoice.product_manager import ProductManager
+from models.database_manager import DatabaseManager
 
 class BodyLayout(QtWidgets.QWidget):
     def __init__(self, parent=None):
@@ -15,16 +14,13 @@ class BodyLayout(QtWidgets.QWidget):
         self.setObjectName("card")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
-        # Section : type de produit
-        self.product_type = ProductType()
-        self.product_type.setObjectName("productType")
-        self.product_type.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        db_manager = DatabaseManager()
+        # Gestion des produits:
+        self.product_manager = ProductManager(db_manager)
+        self.product_manager.setObjectName("productType")
+        self.product_manager.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
-        # Section : liste des produits
-        self.standard_products = StandardInvoiceProducts()
-
-        self.body_layout.addWidget(self.product_type, 1)
-        self.body_layout.addWidget(self.standard_products, 3)
+        self.body_layout.addWidget(self.product_manager)
 
         # Chargement du style QSS
         self._apply_stylesheet("styles/product_type.qss")

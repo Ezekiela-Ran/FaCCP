@@ -26,11 +26,11 @@ class MainLayout(QWidget):
         self.body_layout = BodyLayout(self)
 
         if invoice_type == "standard":
+            GlobalVariable.invoice_type = invoice_type
             self.head_layout.standard_invoice()
-            GlobalVariable.invoice_type = "standard"
         elif invoice_type == "proforma":
+            GlobalVariable.invoice_type = invoice_type
             self.head_layout.proforma_invoice()
-            GlobalVariable.invoice_type = "proforma"
 
 
         # Ajout au layout principal

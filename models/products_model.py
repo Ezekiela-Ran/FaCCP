@@ -1,5 +1,5 @@
-from models.database_management import DatabaseManagement
+from models.database_manager import DatabaseManager
 
-class ProductsModel(DatabaseManagement):
+class ProductsModel(DatabaseManager):
     table_name = "products"
     name_column = "product_name"

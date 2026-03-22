@@ -4,9 +4,12 @@ import mysql.connector
 class Tables:
     def __init__(self):
         self.conn = mysql.connector.connect(**DB_CONFIG)
+        # Ensure each statement sees up-to-date data across multiple app connections.
+        self.conn.autocommit = True
         self.cursor = self.conn.cursor(dictionary=True)
         self.cursor.execute("CREATE DATABASE IF NOT EXISTS invoicing")
         self.cursor.execute("USE invoicing")
+        self.cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
 
     def proforma_invoice_table(self):
         self.cursor.execute("""

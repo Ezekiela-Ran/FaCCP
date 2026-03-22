@@ -1,19 +1,50 @@
-.invoice-root {
+/* Styles impression facture — unités pt uniquement, pas de display:table/grid/flex */
+
+body {
     font-family: "Times New Roman", serif;
-    margin: 10px;
+    font-size: 10pt;
+    color: #000;
+    margin: 0;
+    padding: 0;
 }
 
-.invoice-title {
-    text-align: center;
+h2 {
+    margin: 0;
+    padding: 0;
 }
 
-.invoice-table-header {
-    font-weight: bold;
-    text-align: center;
-    background: #f0f0f0;
+.invoice-root {
+    margin: 0;
+    padding: 0;
 }
 
+/* Tableau principal des lignes produits */
+.invoice-table {
+    width: 100%;
+    border-collapse: collapse;
+    page-break-inside: auto;
+}
+
+.invoice-table th,
+.invoice-table td {
+    border: 1px solid #000;
+    padding: 2pt 3pt;
+    vertical-align: top;
+    word-wrap: break-word;
+}
+
+.invoice-table thead {
+    display: table-header-group;
+}
+
+.invoice-table tbody tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+}
+
+/* Pied de page */
 .invoice-footer {
-    margin-top: 20px;
-    font-weight: bold;
+    margin-top: 8pt;
+    font-style: italic;
+    font-size: 10pt;
 }

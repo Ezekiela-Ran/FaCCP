@@ -5,6 +5,27 @@ from views.foundation.globals import GlobalVariable
 
 class SaveInvoiceAction:
     @staticmethod
+    def _refresh_record_list(main_layout, body_layout):
+        head_layout = getattr(main_layout, "head_layout", None)
+        record_widget = getattr(head_layout, "record", None)
+        if not record_widget:
+            return
+
+        if hasattr(record_widget, "load_records"):
+            record_widget.load_records()
+            return
+
+        list_record = getattr(record_widget, "list_record", None)
+        if not list_record or not hasattr(list_record, "update_data"):
+            return
+
+        if GlobalVariable.invoice_type == "standard":
+            data = body_layout.invoice_service.get_standard_invoices()
+        else:
+            data = body_layout.invoice_service.get_proforma_invoices()
+        list_record.update_data(data)
+
+    @staticmethod
     def execute(body_layout):
         main_layout = body_layout.parent()
         if not hasattr(main_layout, "head_layout") or not hasattr(main_layout.head_layout, "form"):
@@ -116,7 +137,6 @@ class SaveInvoiceAction:
         msg.setText(f"Enregistrement effectué avec succès.\nNuméro de facture: {invoice_id}")
         msg.exec()
 
-        if hasattr(main_layout.head_layout, "record"):
-            main_layout.head_layout.record.load_records()
+        SaveInvoiceAction._refresh_record_list(main_layout, body_layout)
 
         body_layout.clear_form_and_selection()

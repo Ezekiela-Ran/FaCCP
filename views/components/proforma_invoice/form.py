@@ -1,6 +1,6 @@
 from views.foundation.templates.form import FormTemplate
-from PySide6.QtCore import (Qt)
-from PySide6.QtWidgets import (QLabel, QLineEdit)
+from PySide6.QtCore import (Qt, QDate)
+from PySide6.QtWidgets import (QLabel, QLineEdit, QDateEdit)
 
 class ProformaInvoiceForm(FormTemplate):
     def __init__(self):
@@ -9,12 +9,20 @@ class ProformaInvoiceForm(FormTemplate):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         self.date_label = QLabel("Date:")
-        self.date_input = QLineEdit()
+        self.date_input = QDateEdit()
+        self.date_input.setObjectName("invoiceDateInput")
+        self.date_input.setCalendarPopup(True)
+        self.date_input.setDate(QDate.currentDate())
 
     
         self.proforma_invoice_number_label = QLabel("N° Facture proforma")
         self.proforma_invoice_number = QLineEdit()
+        self.proforma_invoice_number.setObjectName("invoiceInput")
         self.proforma_invoice_number.setFixedWidth(0)
 
         self.right_form.addRow(self.date_label, self.date_input)
         self.left_form.addRow(self.proforma_invoice_number_label, self.proforma_invoice_number)
+
+        # Hide address fields for proforma
+        self.address_label.hide()
+        self.address_input.hide()

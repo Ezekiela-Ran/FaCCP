@@ -5,7 +5,7 @@ import sys
 from PySide6 import QtWidgets
 from views.foundation.window import Window
 from views.foundation.main_layout import MainLayout
-from models.database_management import DatabaseManagement
+from models.database_manager import DatabaseManager
 
 
 def load_styles(app):
@@ -15,7 +15,7 @@ def load_styles(app):
 
 if __name__ == "__main__":
     
-    DatabaseManagement.create_tables()
+    DatabaseManager.create_tables()
 
     app = QtWidgets.QApplication([])
 

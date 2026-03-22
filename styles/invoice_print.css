@@ -1,0 +1,19 @@
+.invoice-root {
+    font-family: "Times New Roman", serif;
+    margin: 10px;
+}
+
+.invoice-title {
+    text-align: center;
+}
+
+.invoice-table-header {
+    font-weight: bold;
+    text-align: center;
+    background: #f0f0f0;
+}
+
+.invoice-footer {
+    margin-top: 20px;
+    font-weight: bold;
+}

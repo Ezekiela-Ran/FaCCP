@@ -9,15 +9,23 @@ class FormTemplate(QWidget):
         # Labels et inputs
         self.company_name_label = QLabel("Raison sociale:")
         self.company_name_input = QLineEdit()
+        self.company_name_input.setObjectName("invoiceInput")
 
         self.responsable_label = QLabel("Responsable:")
         self.responsable_input = QLineEdit()
+        self.responsable_input.setObjectName("invoiceInput")
 
         self.stat_label = QLabel("Statistic:")
         self.stat_input = QLineEdit()
+        self.stat_input.setObjectName("invoiceInput")
 
         self.nif_label = QLabel("NIF:")
         self.nif_input = QLineEdit()
+        self.nif_input.setObjectName("invoiceInput")
+
+        self.address_label = QLabel("Adresse:")
+        self.address_input = QLineEdit()
+        self.address_input.setObjectName("invoiceInput")
 
         # Layout principal horizontal (2 colonnes)
         main_layout = QHBoxLayout()
@@ -27,6 +35,7 @@ class FormTemplate(QWidget):
         self.left_form.setSpacing(0)
         self.left_form.addRow(self.company_name_label, self.company_name_input)
         self.left_form.addRow(self.stat_label, self.stat_input)
+        self.left_form.addRow(self.address_label, self.address_input)
 
         # Colonne droite
         self.right_form = QFormLayout()
@@ -42,7 +51,7 @@ class FormTemplate(QWidget):
         self.setWindowTitle("Formulaire")
 
         # Charger le style depuis input.qss
-        with open("styles/input.qss", "r") as f:
+        with open("styles/input.qss", "r", encoding="utf-8") as f:
             style = f.read()
             self.setStyleSheet(style)
 

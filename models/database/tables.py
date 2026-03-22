@@ -4,7 +4,7 @@ import mysql.connector
 class Tables:
     def __init__(self):
         self.conn = mysql.connector.connect(**DB_CONFIG)
-        self.cursor = self.conn.cursor()
+        self.cursor = self.conn.cursor(dictionary=True)
         self.cursor.execute("CREATE DATABASE IF NOT EXISTS invoicing")
         self.cursor.execute("USE invoicing")
 
@@ -16,7 +16,9 @@ class Tables:
             nif VARCHAR(255),
             stat VARCHAR(255),
             date DATE NOT NULL,
-            resp VARCHAR(255) NOT NULL
+            resp VARCHAR(255) NOT NULL,
+            total DECIMAL(10,2) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
 
@@ -31,7 +33,9 @@ class Tables:
             date_issue DATE NOT NULL,
             date_result DATE NOT NULL,
             product_ref VARCHAR(255) NOT NULL,
-            resp VARCHAR(255) NOT NULL
+            resp VARCHAR(255) NOT NULL,
+            total DECIMAL(10,2) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
 
@@ -58,6 +62,23 @@ class Tables:
             FOREIGN KEY (product_type_id)
             REFERENCES product_type(id)
             ON DELETE CASCADE
+        )
+        """)
+
+    def invoice_client_table(self):
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS invoice_client (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            invoice_id INT NOT NULL,
+            invoice_type ENUM('standard', 'proforma') NOT NULL,
+            product_id INT NOT NULL,
+            quantity INT DEFAULT 1,
+            physico DECIMAL(10,2) DEFAULT 0,
+            micro DECIMAL(10,2) DEFAULT 0,
+            toxico DECIMAL(10,2) DEFAULT 0,
+            subtotal DECIMAL(10,2) DEFAULT 0,
+            total DECIMAL(10,2) DEFAULT 0,
+            FOREIGN KEY (product_id) REFERENCES products(id)
         )
         """)
 

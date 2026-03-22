@@ -17,8 +17,8 @@ class ListRecordTemplate(QWidget):
         self.search_input = QLineEdit()
         self.search_input.textChanged.connect(self.filter_data)
         self.delete_button = QPushButton("Supprimer")
+        self.delete_button.setObjectName("deleteRecordButton")
         self.delete_button.clicked.connect(self.delete_selected_record)
-        self.delete_button.setStyleSheet("QPushButton { background-color: #DC3545; color: white; padding: 5px 10px; border: none; border-radius: 4px; } QPushButton:hover { background-color: #C82333; }")
         search_layout.addWidget(self.search_label)
         search_layout.addWidget(self.search_input, 1)  # Take remaining space
         search_layout.addWidget(self.delete_button, 1)  # Take 1/2 of the space

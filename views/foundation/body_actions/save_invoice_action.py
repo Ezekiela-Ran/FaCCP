@@ -1,0 +1,122 @@
+from PySide6.QtWidgets import QMessageBox
+
+from views.foundation.globals import GlobalVariable
+
+
+class SaveInvoiceAction:
+    @staticmethod
+    def execute(body_layout):
+        main_layout = body_layout.parent()
+        if not hasattr(main_layout, "head_layout") or not hasattr(main_layout.head_layout, "form"):
+            return
+
+        form = main_layout.head_layout.form
+        company_name = form.company_name_input.text().strip()
+        responsable = form.responsable_input.text().strip()
+        stat = form.stat_input.text()
+        nif = form.nif_input.text()
+
+        errors = []
+        if not company_name:
+            errors.append("Raison sociale est obligatoire")
+        if not responsable:
+            errors.append("Responsable est obligatoire")
+
+        selected_products = [
+            pid for pid, selected in body_layout.product_manager.selected_products.items() if selected
+        ]
+        if not selected_products:
+            errors.append("Au moins un produit doit être sélectionné")
+
+        if GlobalVariable.invoice_type == "standard":
+            for pid in selected_products:
+                product = body_layout.product_service.get_product_by_id(pid)
+                if not product or not product.get("ref_b_analyse") or str(product["ref_b_analyse"]).strip() == "":
+                    product_name = product["product_name"] if product else "inconnu"
+                    errors.append(
+                        f"Le champ 'Ref.b.analyse' est obligatoire pour le produit {product_name}"
+                    )
+
+        if errors:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setWindowTitle("Erreur de validation")
+            msg.setText("L'enregistrement ne peut pas être effectué pour les raisons suivantes:")
+            msg.setDetailedText("\n".join(errors))
+            msg.exec()
+            return
+
+        if GlobalVariable.invoice_type == "standard":
+            date_issue = form.date_issue_input.date().toString("yyyy-MM-dd") if hasattr(form, "date_issue_input") else ""
+            date_result = form.date_result_input.date().toString("yyyy-MM-dd") if hasattr(form, "date_result_input") else ""
+            product_ref = form.product_ref_input.text() if hasattr(form, "product_ref_input") else ""
+            address = form.address_input.text()
+            total = body_layout.calculate_total()
+
+            if body_layout.current_invoice_id:
+                invoice_id = body_layout.invoice_service.update_standard_invoice(
+                    body_layout.current_invoice_id,
+                    company_name,
+                    stat,
+                    nif,
+                    address,
+                    date_issue,
+                    date_result,
+                    product_ref,
+                    responsable,
+                    total,
+                    selected_products,
+                )
+            else:
+                invoice_id = body_layout.invoice_service.save_standard_invoice(
+                    company_name,
+                    stat,
+                    nif,
+                    address,
+                    date_issue,
+                    date_result,
+                    product_ref,
+                    responsable,
+                    total,
+                    selected_products,
+                )
+
+            if hasattr(form, "standard_invoice_number"):
+                form.standard_invoice_number.setText(f"N° facture: {invoice_id}")
+
+        else:
+            date_value = form.date_input.date().toString("yyyy-MM-dd") if hasattr(form, "date_input") else ""
+            total = body_layout.calculate_total()
+
+            if body_layout.current_invoice_id:
+                invoice_id = body_layout.invoice_service.update_proforma_invoice(
+                    body_layout.current_invoice_id,
+                    company_name,
+                    nif,
+                    stat,
+                    date_value,
+                    responsable,
+                    total,
+                    selected_products,
+                )
+            else:
+                invoice_id = body_layout.invoice_service.save_proforma_invoice(
+                    company_name,
+                    nif,
+                    stat,
+                    date_value,
+                    responsable,
+                    total,
+                    selected_products,
+                )
+
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setWindowTitle("Enregistrement réussi")
+        msg.setText(f"Enregistrement effectué avec succès.\nNuméro de facture: {invoice_id}")
+        msg.exec()
+
+        if hasattr(main_layout.head_layout, "record"):
+            main_layout.head_layout.record.load_records()
+
+        body_layout.clear_form_and_selection()

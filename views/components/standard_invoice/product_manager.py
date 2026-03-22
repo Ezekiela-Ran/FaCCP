@@ -1,17 +1,17 @@
 from PySide6.QtWidgets import (
     QListWidgetItem, QTableWidgetItem, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QTableWidget, QAbstractItemView, QLineEdit, QLabel, QInputDialog, 
 )
-from PySide6.QtGui import QFont, QIntValidator
+from PySide6.QtGui import QIntValidator
 from PySide6.QtCore import Qt, Signal
 
 
 class ProductManager(QWidget):
     selection_changed = Signal()  # Signal émis quand la sélection change
     
-    def __init__(self, db_manager, invoice_type="standard"):
+    def __init__(self, product_service, invoice_type="standard"):
         super().__init__()
         
-        self.db = db_manager
+        self.product_service = product_service
         self.invoice_type = invoice_type
         self.selected_products = {}  # dictionnaire {pid: True/False}
 
@@ -24,15 +24,12 @@ class ProductManager(QWidget):
         main_layout.addLayout(type_list_layout, 1)
 
         self.label = QLabel("Catégorie")
-        self.label.setStyleSheet("font-size: 18px; font-weight: bold; color: #1F4E79;")
+        self.label.setObjectName("categoryTitle")
         self.add_type_btn = QPushButton("Ajouter")
+        self.add_type_btn.setObjectName("categoryActionButton")
         self.del_type_btn = QPushButton("Supprimer")
+        self.del_type_btn.setObjectName("categoryActionButton")
         self.type_list = QListWidget()
-
-        # Appliquer style aux boutons de catégorie
-        button_style = "QPushButton { background-color: #1F4E79; color: white; padding: 4px 10px; border: none; border-radius: 4px; } QPushButton:hover { background-color: #163D62; }"
-        self.add_type_btn.setStyleSheet(button_style)
-        self.del_type_btn.setStyleSheet(button_style)
 
         type_list_layout.addWidget(self.label)
         type_list_layout.addWidget(self.add_type_btn)
@@ -44,7 +41,7 @@ class ProductManager(QWidget):
         main_layout.addLayout(product_list_layout, 3)
 
         self.add_product_btn = QPushButton("Ajouter")
-        self.add_product_btn.setStyleSheet(button_style)
+        self.add_product_btn.setObjectName("categoryActionButton")
 
         self.product_table = QTableWidget()
         if self.invoice_type == "proforma":
@@ -62,6 +59,7 @@ class ProductManager(QWidget):
         product_list_layout.addWidget(self.product_table)
 
         self.setLayout(main_layout)
+        self._apply_stylesheet("styles/product_manager.qss")
 
         # Connexions
         self.add_type_btn.clicked.connect(self.add_type)
@@ -73,8 +71,8 @@ class ProductManager(QWidget):
     
     def load_types(self):
         self.type_list.clear()
-        self.db.table_name = "product_type"
-        types = self.db.fetch_all()
+        self.product_service.db.table_name = "product_type"
+        types = self.product_service.db.fetch_all()
         if not types:
             item = QListWidgetItem("Aucune catégorie disponible")
             item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
@@ -90,10 +88,9 @@ class ProductManager(QWidget):
                 self.type_list.addItem(item)
 
     def add_type(self):
-        self.db.table_name = "product_type"
         name, ok = QInputDialog.getText(self, "Nouveau Type", "Nom du type:")
         if ok and name:
-            self.db.insert_type(name)
+            self.product_service.insert_type(name)
             self.load_types()
 
     def del_type(self):
@@ -102,7 +99,7 @@ class ProductManager(QWidget):
             return
         tid = item.data(Qt.UserRole)  # récupérer l'ID stocké
         try:
-            self.db.delete_type(tid)
+            self.product_service.delete_type(tid)
             self.load_types()
             self.product_table.setRowCount(0)
         except ValueError as e:
@@ -115,7 +112,7 @@ class ProductManager(QWidget):
         tid = self.type_list.currentItem().data(Qt.UserRole)
         name, ok = QInputDialog.getText(self, "Nouveau Produit", "Nom du produit:")
         if ok and name:
-            pid = self.db.add_product(tid, name)
+            pid = self.product_service.add_product(tid, name)
             self.add_product_row(pid, name, "0", "0", "0", "0", "0", "0")
 
     def add_product_row(self, pid, name, ref, num_act, physico, toxico, micro, subtotal):
@@ -166,12 +163,9 @@ class ProductManager(QWidget):
         btn_del = QPushButton("Suppr")
         btn_mod = QPushButton("Modifier")
         btn_sel = QPushButton("Select")
-
-        # Style boutons ligne produits
-        row_button_style = "QPushButton { background-color: #2F5A8F; color: white; padding: 3px 8px; border: none; border-radius: 3px; } QPushButton:hover { background-color: #1E3F61; }"
-        btn_del.setStyleSheet(row_button_style)
-        btn_mod.setStyleSheet(row_button_style)
-        btn_sel.setStyleSheet(row_button_style)
+        btn_del.setObjectName("rowActionButton")
+        btn_mod.setObjectName("rowActionButton")
+        btn_sel.setObjectName("rowActionButton")
 
         # Positions des boutons selon le type
         if self.invoice_type == "standard":
@@ -187,7 +181,7 @@ class ProductManager(QWidget):
         self.product_table.setCellWidget(row, btn_mod_col, btn_mod)
         self.product_table.setCellWidget(row, btn_sel_col, btn_sel)
 
-        btn_del.clicked.connect(lambda: self.db.delete_product(pid) or self.product_table.removeRow(row))
+        btn_del.clicked.connect(lambda: self.product_service.delete_product(pid) or self.product_table.removeRow(row))
         btn_mod.clicked.connect(lambda: self.toggle_edit(row))
         btn_sel.clicked.connect(lambda: self.toggle_select(pid, row))
 
@@ -279,7 +273,7 @@ class ProductManager(QWidget):
             ref = 0  # Not used for proforma
         num_act = self.product_table.cellWidget(row, num_act_col).text()
 
-        self.db.update_product(pid, ref, num_act,
+        self.product_service.update_product(pid, ref, num_act,
                                int(physico),
                                int(toxico),
                                int(micro),
@@ -309,7 +303,10 @@ class ProductManager(QWidget):
             editable_cols = [1, 2, 3, 4]
         for col in editable_cols:
             widget = self.product_table.cellWidget(row, col)
-            widget.setStyleSheet("background-color: lightgreen; border: 1px solid green;")
+            if widget:
+                widget.setProperty("selectedRow", True)
+                widget.style().unpolish(widget)
+                widget.style().polish(widget)
 
     def clear_selection_style(self, row):
         for col in range(self.product_table.columnCount()):
@@ -322,7 +319,10 @@ class ProductManager(QWidget):
             editable_cols = [1, 2, 3, 4]
         for col in editable_cols:
             widget = self.product_table.cellWidget(row, col)
-            widget.setStyleSheet("")
+            if widget:
+                widget.setProperty("selectedRow", False)
+                widget.style().unpolish(widget)
+                widget.style().polish(widget)
 
     # Le bouton de suppression global de la liste de produits a été supprimé de l'UI.
     # La suppression se fait via le bouton "Suppr" de chaque ligne dans la table.
@@ -384,7 +384,7 @@ class ProductManager(QWidget):
         if not self.type_list.currentItem():
             return
         tid = self.type_list.currentItem().data(Qt.UserRole)
-        products = self.db.get_products_by_type(tid)
+        products = self.product_service.get_products_by_type(tid)
         if not products:
             self.product_table.insertRow(0)
             item = QTableWidgetItem("Aucun produit disponible pour cette catégorie")
@@ -419,4 +419,11 @@ class ProductManager(QWidget):
                         break
         self.enable_form_fields()
         self.selection_changed.emit()
+
+    def _apply_stylesheet(self, stylesheet_path):
+        try:
+            with open(stylesheet_path, "r", encoding="utf-8") as file:
+                self.setStyleSheet(file.read())
+        except FileNotFoundError:
+            print(f"Stylesheet {stylesheet_path} not found.")
 

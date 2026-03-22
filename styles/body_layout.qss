@@ -1,0 +1,57 @@
+#netAPayerLabel {
+    font-size: 14px;
+    font-weight: bold;
+    color: #000000;
+    background-color: #FFFFCC;
+    padding: 4px;
+    border: 1px solid #999999;
+    border-radius: 4px;
+}
+
+QPushButton#saveButton {
+    background-color: #1F4E79;
+    color: white;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+}
+
+QPushButton#saveButton:hover {
+    background-color: #163D62;
+}
+
+QPushButton#printButton {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+}
+
+QPushButton#printButton:hover {
+    background-color: #45A049;
+}
+
+QPushButton#previewButton {
+    background-color: #2196F3;
+    color: white;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+}
+
+QPushButton#previewButton:hover {
+    background-color: #1976D2;
+}
+
+QPushButton#convertButton {
+    background-color: #FF9800;
+    color: white;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+}
+
+QPushButton#convertButton:hover {
+    background-color: #E68900;
+}

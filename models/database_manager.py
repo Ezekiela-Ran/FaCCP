@@ -179,12 +179,12 @@ class DatabaseManager(Tables):
             cursor.close()
     
     def get_standard_invoices(self):
-        self.cursor.execute("SELECT id, company_name, address, date_issue, date_result, product_ref, resp, total FROM standard_invoice ORDER BY created_at DESC")
+        self.cursor.execute("SELECT id, company_name, address, date_issue, date_result, product_ref, resp, total FROM standard_invoice ORDER BY created_at ASC")
         results = self.cursor.fetchall()
         return [tuple(d.values()) for d in results]
     
     def get_proforma_invoices(self):
-        self.cursor.execute("SELECT id, company_name, date, resp, total FROM proforma_invoice ORDER BY created_at DESC")
+        self.cursor.execute("SELECT id, company_name, date, resp, total FROM proforma_invoice ORDER BY created_at ASC")
         results = self.cursor.fetchall()
         return [tuple(d.values()) for d in results]
     
@@ -199,5 +199,19 @@ class DatabaseManager(Tables):
     def get_proforma_invoice_by_id(self, invoice_id):
         self.cursor.execute("SELECT * FROM proforma_invoice WHERE id=%s", (invoice_id,))
         return self.cursor.fetchone()
+    
+    def delete_standard_invoice(self, invoice_id):
+        # Supprimer les items associés
+        self.cursor.execute("DELETE FROM invoice_client WHERE invoice_id=%s AND invoice_type=%s", (invoice_id, 'standard'))
+        # Supprimer la facture
+        self.cursor.execute("DELETE FROM standard_invoice WHERE id=%s", (invoice_id,))
+        self.conn.commit()
+    
+    def delete_proforma_invoice(self, invoice_id):
+        # Supprimer les items associés
+        self.cursor.execute("DELETE FROM invoice_client WHERE invoice_id=%s AND invoice_type=%s", (invoice_id, 'proforma'))
+        # Supprimer la facture
+        self.cursor.execute("DELETE FROM proforma_invoice WHERE id=%s", (invoice_id,))
+        self.conn.commit()
 
   

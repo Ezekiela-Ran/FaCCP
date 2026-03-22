@@ -39,3 +39,10 @@ class ProformaInvoiceRecord(QtWidgets.QWidget):
             
             # Mettre à jour le total
             self.parent().parent().body_layout.update_total_display()
+
+    def delete_invoice(self, invoice_id):
+        from PySide6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(self, 'Confirmation', f"Êtes-vous sûr de vouloir supprimer la facture proforma {invoice_id} ?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.proformainvoice.delete_proforma_invoice(invoice_id)
+            self.load_records()

@@ -23,6 +23,7 @@ class ProductManager(QWidget):
         main_layout.addLayout(type_list_layout, 1)
 
         self.label = QLabel("Catégorie")
+        self.label.setStyleSheet("font-size: 18px; font-weight: bold; color: #1F4E79;")
         self.add_type_btn = QPushButton("Ajouter")
         self.del_type_btn = QPushButton("Supprimer")
         self.type_list = QListWidget()
@@ -184,14 +185,16 @@ class ProductManager(QWidget):
 
     def format_number(self, value):
         if value is None:
-            return "0"
+            return "0 Ariary"
         try:
             v = float(value)
         except ValueError:
-            return "0"
+            return "0 Ariary"
         if v.is_integer():
-            return str(int(v))
-        return str(v)
+            formatted = f"{int(v):,}".replace(",", " ")
+            return f"{formatted} Ariary"
+        formatted = f"{v:,.2f}".replace(",", " ")
+        return f"{formatted} Ariary"
 
     def parse_number(self, value):
         try:

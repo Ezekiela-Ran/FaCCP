@@ -10,12 +10,14 @@ class ProformaInvoiceForm(FormTemplate):
 
         self.date_label = QLabel("Date:")
         self.date_input = QDateEdit()
+        self.date_input.setStyleSheet("font-family: 'Times New Roman';")
         self.date_input.setCalendarPopup(True)
         self.date_input.setDate(QDate.currentDate())
 
     
         self.proforma_invoice_number_label = QLabel("N° Facture proforma")
         self.proforma_invoice_number = QLineEdit()
+        self.proforma_invoice_number.setStyleSheet("font-family: 'Times New Roman';")
         self.proforma_invoice_number.setFixedWidth(0)
 
         self.right_form.addRow(self.date_label, self.date_input)

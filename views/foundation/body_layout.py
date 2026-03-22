@@ -265,7 +265,8 @@ class BodyLayout(QtWidgets.QWidget):
     def update_total_display(self):
         total = self.calculate_total()
         total_words = self.number_to_words(int(total)) + " ARIARY"
-        self.net_a_payer_label.setText(f"Net à payer: {total:.2f} Ariary ({total_words})")
+        formatted_total = f"{total:,.2f}".replace(",", " ")
+        self.net_a_payer_label.setText(f"Net à payer: {formatted_total} Ariary ({total_words})")
 
     def _apply_stylesheet(self, path: str):
         """Charge et applique une feuille de style QSS depuis un fichier."""

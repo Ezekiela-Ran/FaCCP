@@ -12,14 +12,17 @@ class StandardInvoiceForm(FormTemplate):
         # Labels et inputs
         self.product_ref_label = QLabel("Ref produit:")
         self.product_ref_input = QLineEdit()
+        self.product_ref_input.setStyleSheet("font-family: 'Times New Roman';")
 
         self.date_issue_label = QLabel("Date d'émission:")
         self.date_issue_input = QDateEdit()
+        self.date_issue_input.setStyleSheet("font-family: 'Times New Roman';")
         self.date_issue_input.setCalendarPopup(True)
         self.date_issue_input.setDate(QDate.currentDate())
 
         self.date_result_label = QLabel("Date de résultat:")
         self.date_result_input = QDateEdit()
+        self.date_result_input.setStyleSheet("font-family: 'Times New Roman';")
         self.date_result_input.setCalendarPopup(True)
         self.date_result_input.setDate(QDate.currentDate())
 

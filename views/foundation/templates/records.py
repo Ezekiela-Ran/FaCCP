@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QVBoxLayout, QLineEdit, QLabel, QWidget
+from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QVBoxLayout, QLineEdit, QLabel, QWidget, QHBoxLayout, QPushButton
 from PySide6 import QtCore
 
 class ListRecordTemplate(QWidget):
@@ -11,13 +11,17 @@ class ListRecordTemplate(QWidget):
         
         layout = QVBoxLayout(self)
         
-        # Search box
-        search_layout = QVBoxLayout()
+        # Search box and delete button
+        search_layout = QHBoxLayout()
         self.search_label = QLabel("Rechercher:")
         self.search_input = QLineEdit()
         self.search_input.textChanged.connect(self.filter_data)
+        self.delete_button = QPushButton("Supprimer")
+        self.delete_button.clicked.connect(self.delete_selected_record)
+        self.delete_button.setStyleSheet("QPushButton { background-color: #DC3545; color: white; padding: 5px 10px; border: none; border-radius: 4px; } QPushButton:hover { background-color: #C82333; }")
         search_layout.addWidget(self.search_label)
-        search_layout.addWidget(self.search_input)
+        search_layout.addWidget(self.search_input, 1)  # Take remaining space
+        search_layout.addWidget(self.delete_button, 1)  # Take 1/2 of the space
         layout.addLayout(search_layout)
         
         # Table
@@ -68,6 +72,13 @@ class ListRecordTemplate(QWidget):
         else:
             self.data = [row for row in self.all_data if any(search_text in str(cell).lower() for cell in row)]
         self._add_row()
+
+    def delete_selected_record(self):
+        current_row = self.table.currentRow()
+        if current_row >= 0:
+            invoice_id = self.table.item(current_row, 0).text()
+            if hasattr(self.parent(), 'delete_invoice'):
+                self.parent().delete_invoice(invoice_id)
 
     def update_data(self, new_data):
         self.all_data = new_data.copy()

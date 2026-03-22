@@ -25,7 +25,7 @@ class InvoicePrinter:
         except FileNotFoundError:
             return ""
 
-    def generate_invoice_html(self, form, invoice_type, selected_products, db_manager):
+    def generate_invoice_html(self, form, invoice_type, selected_products, db_manager, ref_mapping=None):
         company_name    = form.company_name_input.text().strip()
         responsable     = form.responsable_input.text().strip()
         stat            = form.stat_input.text().strip()
@@ -43,7 +43,16 @@ class InvoicePrinter:
             product_ref_raw = ''
             title           = 'FACTURE PROFORMA'
 
-        products        = [db_manager.get_product_by_id(pid) for pid in selected_products if db_manager.get_product_by_id(pid)]
+        products = []
+        for pid in selected_products:
+          prod = db_manager.get_product_by_id(pid)
+          if not prod:
+            continue
+          # prefer ref from ref_mapping (in-memory dynamic numbering) if provided
+          if ref_mapping and pid in ref_mapping:
+            prod = dict(prod)  # shallow copy
+            prod['ref_b_analyse'] = ref_mapping.get(pid)
+          products.append(prod)
         total           = sum(float(p.get('subtotal', 0) or 0) for p in products)
         total_formatted = f"{total:,.0f}".replace(',', '\u00a0')
         total_words     = TextUtils.number_to_words(round(total)).upper()

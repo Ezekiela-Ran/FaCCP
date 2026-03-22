@@ -23,10 +23,26 @@ class PreviewInvoiceAction:
             QMessageBox.warning(body_layout, "Aperçu impossible", "Aucun produit sélectionné.")
             return
 
+        # build mapping pid -> in-memory ref based on selection order so preview shows dynamic numbers
+        pm = body_layout.product_manager
+        try:
+            order = pm.selection_order
+        except Exception:
+            order = list(selected_products)
+        # build ordered selected list (keep only currently selected pids)
+        selected_set = {pid for pid, sel in pm.selected_products.items() if sel}
+        ordered_selected = [pid for pid in order if pid in selected_set]
+        # fallback if empty
+        if not ordered_selected:
+            ordered_selected = [pid for pid in selected_products]
+
+        ref_mapping = {pid: idx + 1 for idx, pid in enumerate(ordered_selected)}
+
         html = body_layout.invoice_printer.generate_invoice_html(
             form,
             GlobalVariable.invoice_type,
-            selected_products,
+            ordered_selected,
             body_layout.db_manager,
+            ref_mapping=ref_mapping,
         )
         body_layout.invoice_printer.preview_invoice(html)

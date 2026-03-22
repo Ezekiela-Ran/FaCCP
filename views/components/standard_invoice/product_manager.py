@@ -14,6 +14,7 @@ class ProductManager(QWidget):
         self.product_service = product_service
         self.invoice_type = invoice_type
         self.selected_products = {}  # dictionnaire {pid: True/False}
+        self.selection_order = []  # ordre de sélection pour numéroter dynamiquement
 
 
         # cadre principale
@@ -51,6 +52,9 @@ class ProductManager(QWidget):
             self.product_table.setColumnCount(10)
             self.product_table.setHorizontalHeaderLabels(["Désignation", "Ref.b.analyse", "N°Acte", "Physico", "Toxico", "Micro", "Sous total", "Suppr", "Modif", "Select"])
         self.product_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        # Hide the reference column from the user but keep the widget so we can update it
+        if self.invoice_type == "standard":
+            self.product_table.setColumnHidden(1, True)
 
         add_button_layout = QHBoxLayout()
         add_button_layout.addStretch()
@@ -273,24 +277,57 @@ class ProductManager(QWidget):
             ref = 0  # Not used for proforma
         num_act = self.product_table.cellWidget(row, num_act_col).text()
 
+        # Persist numeric components but DO NOT change ref here (ref is managed in-memory until save)
         self.product_service.update_product(pid, ref, num_act,
-                               int(physico),
-                               int(toxico),
-                               int(micro),
-                               int(subtotal_value))
+                       int(physico),
+                       int(toxico),
+                       int(micro),
+                       int(subtotal_value),
+                       update_ref=False)
 
     def toggle_select(self, pid, row):
         btn_col = 9 if self.invoice_type == "standard" else 8
         btn = self.product_table.cellWidget(row, btn_col)
-        if btn.text() == "Select":
-            btn.setText("Annuler")
+        ref_col = 1 if self.invoice_type == "standard" else None
+        currently_selected = bool(self.selected_products.get(pid, False))
+
+        if not currently_selected:
+            # Select: mark and append to order
+            if btn:
+                btn.setText("Annuler")
             self.selected_products[pid] = True
+            if pid not in self.selection_order:
+                self.selection_order.append(pid)
             self.apply_selection_style(row)
         else:
-            btn.setText("Select")
+            # Deselect: unmark and remove from order
+            if btn:
+                btn.setText("Select")
             self.selected_products[pid] = False
+            if pid in self.selection_order:
+                self.selection_order.remove(pid)
             self.clear_selection_style(row)
-        self.selection_changed.emit()  # Émettre le signal
+
+        # Renumber UI refs dynamically (1..n) according to selection_order
+        self._renumber_selection_ui()
+        self.selection_changed.emit()
+
+    def _renumber_selection_ui(self):
+        # Assign contiguous refs 1..n to selected products based on selection_order
+        # Rows not selected get 0
+        # Build mapping pid -> assigned ref
+        assigned = {pid: idx + 1 for idx, pid in enumerate(self.selection_order)}
+        for row in range(self.product_table.rowCount()):
+            item = self.product_table.item(row, 0)
+            if not item:
+                continue
+            pid = item.data(Qt.UserRole)
+            if self.invoice_type == 'standard':
+                ref_widget = self.product_table.cellWidget(row, 1)
+                if pid in assigned:
+                    ref_widget.setText(str(assigned[pid]))
+                else:
+                    ref_widget.setText("0")
 
     def apply_selection_style(self, row):
         for col in range(self.product_table.columnCount()):
@@ -364,9 +401,14 @@ class ProductManager(QWidget):
                 form.date_input.setEnabled(True)
 
     def select_products(self, product_ids):
+        # Select given products and maintain selection order. Do not persist refs here.
         for pid in product_ids:
+            if self.selected_products.get(pid, False):
+                continue
             self.selected_products[pid] = True
-            # Trouver la ligne et appliquer la sélection
+            if pid not in self.selection_order:
+                self.selection_order.append(pid)
+            # Trouver la ligne et appliquer la sélection UI
             for row in range(self.product_table.rowCount()):
                 item_pid = self.product_table.item(row, 0).data(Qt.UserRole)
                 if item_pid == pid:
@@ -376,6 +418,8 @@ class ProductManager(QWidget):
                         btn.setText("Annuler")
                         self.apply_selection_style(row)
                     break
+        # Renumber UI refs after bulk selection
+        self._renumber_selection_ui()
         # la sélection ne désactive plus les champs du formulaire client
         return
 
@@ -411,13 +455,40 @@ class ProductManager(QWidget):
                 for row in range(self.product_table.rowCount()):
                     item_pid = self.product_table.item(row, 0)
                     if item_pid and item_pid.data(Qt.UserRole) == pid:
-                        btn = self.product_table.cellWidget(row, 9)
+                        btn_col = 9 if self.invoice_type == "standard" else 8
+                        btn = self.product_table.cellWidget(row, btn_col)
                         if btn:
                             btn.setText("Select")
+                        # decrement ref for standard invoices
+                        if self.invoice_type == "standard":
+                            ref_widget = self.product_table.cellWidget(row, 1)
+                            try:
+                                cur = int(ref_widget.text() or 0)
+                            except Exception:
+                                cur = 0
+                            # Deselect: free the reference (set to 0)
+                            new = 0
+                            ref_widget.setText("0")
+                            # persist
+                            num_act = self.product_table.cellWidget(row, 2).text()
+                            physico = int(self.product_table.cellWidget(row, 3).text() or 0)
+                            toxico = int(self.product_table.cellWidget(row, 4).text() or 0)
+                            micro = int(self.product_table.cellWidget(row, 5).text() or 0)
+                            subtotal = int((physico + toxico + micro) or 0)
+                            try:
+                                    # Do not persist ref to DB on UI deselection here
+                                    self.product_service.update_product(pid, new, num_act, physico, toxico, micro, subtotal, update_ref=False)
+                            except Exception:
+                                pass
                         self.selected_products[pid] = False
                         self.clear_selection_style(row)
+                        # also remove from selection order
+                        if pid in self.selection_order:
+                            self.selection_order.remove(pid)
                         break
         self.enable_form_fields()
+        # Renumber UI refs to reflect cleared selections
+        self._renumber_selection_ui()
         self.selection_changed.emit()
 
     def _apply_stylesheet(self, stylesheet_path):

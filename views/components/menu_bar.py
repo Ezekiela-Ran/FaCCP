@@ -17,6 +17,9 @@ class MenuBar(QtWidgets.QMenuBar):
         proforma_action = self.new_file_menu.addAction("Facture proforma")
         proforma_action.triggered.connect(lambda: self.parent.menubar_click_proforma())
         
+        # Action de réinitialisation : archive les données de l'année précédente et remet les compteurs à 1
+        reset_action = self.file_menu.addAction("Réinitialisation")
+        reset_action.triggered.connect(lambda: self.parent.menubar_click_reset())
         # Menu pour les thèmes
         self.theme_menu = self.addMenu("Thème")
         self.theme_menu.addAction("Clair")

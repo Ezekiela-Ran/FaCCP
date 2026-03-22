@@ -1,8 +1,9 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QMessageBox
 from views.foundation.head_layout import HeadLayout
 from views.foundation.body_layout import BodyLayout
 from views.components.menu_bar import MenuBar
 from views.foundation.globals import GlobalVariable
+from models.database_manager import DatabaseManager
 
 class MainLayout(QWidget):
     def __init__(self, parent):
@@ -42,6 +43,19 @@ class MainLayout(QWidget):
 
     def menubar_click_proforma(self):
         self.build_ui("proforma")
+
+    def menubar_click_reset(self):
+        reply = QMessageBox.question(self, "Réinitialisation", "Confirmer la réinitialisation : les données actuelles seront archivées pour l'année courante et les compteurs seront remis à 1. Continuer ?",
+                                     QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            db = DatabaseManager()
+            try:
+                db.archive_and_reset()
+                QMessageBox.information(self, "Réinitialisation", "Archivage et réinitialisation terminés avec succès.")
+            except Exception as e:
+                QMessageBox.critical(self, "Erreur", f"La réinitialisation a échoué : {e}")
+            finally:
+                db.close()
 
     def clear_layout(self):
         while self.layout.count():

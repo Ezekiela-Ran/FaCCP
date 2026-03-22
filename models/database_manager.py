@@ -51,6 +51,21 @@ class DatabaseManager(Tables):
         finally:
             cursor.close()
 
+    def get_max_ref_b_analyse(self):
+        """Return current maximum ref_b_analyse (int) or 0 if none."""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("SELECT MAX(ref_b_analyse) FROM products")
+            row = cursor.fetchone()
+            if row:
+                try:
+                    return int(row[0] or 0)
+                except Exception:
+                    return 0
+            return 0
+        finally:
+            cursor.close()
+
     def insert_type(self, name: str):
         cursor = self.conn.cursor()
         try:
@@ -99,10 +114,20 @@ class DatabaseManager(Tables):
         self.conn.commit()
     
     def update_product(self, product_id, ref, num_act, physico, toxico, micro, subtotal):
-        self.cursor.execute(
-            "UPDATE products SET ref_b_analyse=%s, num_act=%s, physico=%s, toxico=%s, micro=%s, subtotal=%s WHERE id=%s",
-            (ref, num_act, physico, toxico, micro, subtotal, product_id)
-        )
+        # Backwards-compatible update: always update numeric fields; update ref only when provided
+        try:
+            self.cursor.execute(
+                "UPDATE products SET num_act=%s, physico=%s, toxico=%s, micro=%s, subtotal=%s WHERE id=%s",
+                (num_act, physico, toxico, micro, subtotal, product_id)
+            )
+            # Update ref separately if needed
+            if ref is not None:
+                self.cursor.execute(
+                    "UPDATE products SET ref_b_analyse=%s WHERE id=%s",
+                    (ref, product_id)
+                )
+        finally:
+            self.conn.commit()
         self.conn.commit()
     
     def save_standard_invoice(self, company_name, stat, nif, address, date_issue, date_result, product_ref, resp, total, selected_products):
@@ -226,5 +251,65 @@ class DatabaseManager(Tables):
         # Supprimer la facture
         self.cursor.execute("DELETE FROM proforma_invoice WHERE id=%s", (invoice_id,))
         self.conn.commit()
+
+    def archive_and_reset(self, year=None):
+        """Archive all non-archive tables into per-year archive tables,
+        then truncate originals and reset AUTO_INCREMENT counters to 1.
+        If `year` is None, use the current year as archive suffix.
+        This routine does not change table schemas or application logic;
+        it only copies rows into archive tables and clears the live tables.
+        """
+        import datetime
+        if year is None:
+            year = datetime.date.today().year
+        suffix = str(year)
+        try:
+            # Find all user tables that are not already archive tables
+            self.cursor.execute(
+                "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES "
+                "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME NOT LIKE '%archive_%'"
+            )
+            tables = [row['TABLE_NAME'] for row in self.cursor.fetchall()]
+
+            # Create archive tables and copy data (archive all tables)
+            exclude_tables = {'products', 'product_type'}
+            for tbl in tables:
+                archive_name = f"{tbl}_archive_{suffix}"
+                self.cursor.execute(f"CREATE TABLE IF NOT EXISTS {archive_name} LIKE {tbl}")
+                self.cursor.execute(f"INSERT INTO {archive_name} SELECT * FROM {tbl}")
+            self.conn.commit()
+
+            # Truncate originals safely by disabling foreign key checks
+            # Do NOT truncate product-related tables (we archived them but keep live data)
+            self.cursor.execute("SET FOREIGN_KEY_CHECKS=0")
+            for tbl in tables:
+                if tbl in exclude_tables:
+                    continue
+                self.cursor.execute(f"TRUNCATE TABLE {tbl}")
+            self.cursor.execute("SET FOREIGN_KEY_CHECKS=1")
+
+            # Reset AUTO_INCREMENT on tables that have it
+            self.cursor.execute(
+                "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA=DATABASE() AND EXTRA LIKE '%auto_increment%'"
+            )
+            auto_tables = {row['TABLE_NAME'] for row in self.cursor.fetchall()}
+            for tbl in auto_tables:
+                try:
+                    self.cursor.execute(f"ALTER TABLE {tbl} AUTO_INCREMENT=1")
+                except Exception:
+                    # ignore tables that can't be altered here
+                    pass
+
+            # Reset ref_b_analyse values in products to 0 so counter restarts at 1
+            try:
+                self.cursor.execute("UPDATE products SET ref_b_analyse=0")
+            except Exception:
+                pass
+
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
 
   

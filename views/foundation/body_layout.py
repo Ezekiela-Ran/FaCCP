@@ -11,6 +11,7 @@ from views.foundation.body_actions.clear_form_and_selection_action import ClearF
 from views.foundation.body_actions.convert_to_standard_action import ConvertToStandardAction
 from views.foundation.body_actions.preview_invoice_action import PreviewInvoiceAction
 from views.foundation.body_actions.print_invoice_action import PrintInvoiceAction
+from views.foundation.body_actions.certificate_action import CertificateAction
 from views.foundation.body_actions.save_invoice_action import SaveInvoiceAction
 from views.foundation.body_actions.update_total_display_action import UpdateTotalDisplayAction
 
@@ -57,6 +58,10 @@ class BodyLayout(QtWidgets.QWidget):
         self.convert_button = QtWidgets.QPushButton("Convertir")
         self.convert_button.setObjectName("convertButton")
 
+        # Bouton certificat CC/CNC
+        self.certificate_button = QtWidgets.QPushButton("Certificat")
+        self.certificate_button.setObjectName("certificateButton")
+
         # Layout pour le total et les boutons
         bottom_layout = QtWidgets.QHBoxLayout()
         bottom_layout.addWidget(self.net_a_payer_label)
@@ -64,6 +69,7 @@ class BodyLayout(QtWidgets.QWidget):
         bottom_layout.addWidget(self.save_button)
         bottom_layout.addWidget(self.print_button)
         bottom_layout.addWidget(self.preview_button)
+        bottom_layout.addWidget(self.certificate_button)
         if invoice_type == "proforma":
             bottom_layout.addWidget(self.convert_button)
 
@@ -80,6 +86,7 @@ class BodyLayout(QtWidgets.QWidget):
         self.save_button.clicked.connect(self.save_invoice)
         self.print_button.clicked.connect(self.print_invoice)
         self.preview_button.clicked.connect(self.preview_invoice)
+        self.certificate_button.clicked.connect(self.open_certificate_dialog)
         if invoice_type == "proforma":
             self.convert_button.clicked.connect(self.convert_to_standard)
 
@@ -110,6 +117,9 @@ class BodyLayout(QtWidgets.QWidget):
 
     def print_invoice(self):
         PrintInvoiceAction.execute(self)
+
+    def open_certificate_dialog(self):
+        CertificateAction.execute(self)
 
     def _apply_stylesheet(self, stylesheet_path):
         try:

@@ -46,8 +46,8 @@ class ProductManager(QWidget):
 
         self.product_table = QTableWidget()
         if self.invoice_type == "proforma":
-            self.product_table.setColumnCount(9)
-            self.product_table.setHorizontalHeaderLabels(["Désignation", "N°Acte", "Physico", "Toxico", "Micro", "Sous total", "Suppr", "Modif", "Select"])
+            self.product_table.setColumnCount(8)
+            self.product_table.setHorizontalHeaderLabels(["Désignation", "Physico", "Toxico", "Micro", "Sous total", "Suppr", "Modif", "Select"])
         else:
             self.product_table.setColumnCount(10)
             self.product_table.setHorizontalHeaderLabels(["Désignation", "Ref.b.analyse", "N°Acte", "Physico", "Toxico", "Micro", "Sous total", "Suppr", "Modif", "Select"])
@@ -129,34 +129,52 @@ class ProductManager(QWidget):
         if self.invoice_type == "standard":
             ref_edit = QLineEdit(str(ref)); ref_edit.setReadOnly(True)
             self.product_table.setCellWidget(row, 1, ref_edit)
+            num_act_edit = QLineEdit(str(num_act)); num_act_edit.setReadOnly(True)
+            physico_edit = QLineEdit(self.format_number(physico)); physico_edit.setReadOnly(True)
+            toxico_edit = QLineEdit(self.format_number(toxico)); toxico_edit.setReadOnly(True)
+            micro_edit = QLineEdit(self.format_number(micro)); micro_edit.setReadOnly(True)
+            subtotal_edit = QLineEdit(self.format_number(subtotal)); subtotal_edit.setReadOnly(True)
 
-        num_act_edit = QLineEdit(str(num_act)); num_act_edit.setReadOnly(True)
-        physico_edit = QLineEdit(self.format_number(physico)); physico_edit.setReadOnly(True)
-        toxico_edit = QLineEdit(self.format_number(toxico)); toxico_edit.setReadOnly(True)
-        micro_edit = QLineEdit(self.format_number(micro)); micro_edit.setReadOnly(True)
-        subtotal_edit = QLineEdit(self.format_number(subtotal)); subtotal_edit.setReadOnly(True)
-
-        # Set validators for integer fields
-        int_validator = QIntValidator(0, 999999)  # Allow 0 to large number
-        physico_edit.setValidator(int_validator)
-        toxico_edit.setValidator(int_validator)
-        micro_edit.setValidator(int_validator)
-        if self.invoice_type == "standard":
+            # Set validators for integer fields
+            int_validator = QIntValidator(0, 999999)
+            physico_edit.setValidator(int_validator)
+            toxico_edit.setValidator(int_validator)
+            micro_edit.setValidator(int_validator)
             ref_edit.setValidator(int_validator)
-        subtotal_edit.setValidator(int_validator)
+            subtotal_edit.setValidator(int_validator)
 
-        if self.invoice_type == "standard":
             self.product_table.setCellWidget(row, 2, num_act_edit)
             self.product_table.setCellWidget(row, 3, physico_edit)
             self.product_table.setCellWidget(row, 4, toxico_edit)
             self.product_table.setCellWidget(row, 5, micro_edit)
             self.product_table.setCellWidget(row, 6, subtotal_edit)
-        else:
-            self.product_table.setCellWidget(row, 1, num_act_edit)
-            self.product_table.setCellWidget(row, 2, physico_edit)
-            self.product_table.setCellWidget(row, 3, toxico_edit)
-            self.product_table.setCellWidget(row, 4, micro_edit)
-            self.product_table.setCellWidget(row, 5, subtotal_edit)
+
+            # Positions des boutons pour standard
+            btn_del_col = 7
+            btn_mod_col = 8
+            btn_sel_col = 9
+        else:  # proforma
+            physico_edit = QLineEdit(self.format_number(physico)); physico_edit.setReadOnly(True)
+            toxico_edit = QLineEdit(self.format_number(toxico)); toxico_edit.setReadOnly(True)
+            micro_edit = QLineEdit(self.format_number(micro)); micro_edit.setReadOnly(True)
+            subtotal_edit = QLineEdit(self.format_number(subtotal)); subtotal_edit.setReadOnly(True)
+
+            # Set validators for integer fields
+            int_validator = QIntValidator(0, 999999)
+            physico_edit.setValidator(int_validator)
+            toxico_edit.setValidator(int_validator)
+            micro_edit.setValidator(int_validator)
+            subtotal_edit.setValidator(int_validator)
+
+            self.product_table.setCellWidget(row, 1, physico_edit)
+            self.product_table.setCellWidget(row, 2, toxico_edit)
+            self.product_table.setCellWidget(row, 3, micro_edit)
+            self.product_table.setCellWidget(row, 4, subtotal_edit)
+
+            # Positions des boutons pour proforma
+            btn_del_col = 5
+            btn_mod_col = 6
+            btn_sel_col = 7
 
         # Connect automatic recalculation et mise à jour DB sur modification des champs relevant du calcul.
         physico_edit.textChanged.connect(lambda _: self.on_price_component_changed(row))
@@ -169,16 +187,6 @@ class ProductManager(QWidget):
         btn_del.setObjectName("rowActionButton")
         btn_mod.setObjectName("rowActionButton")
         btn_sel.setObjectName("rowActionButton")
-
-        # Positions des boutons selon le type
-        if self.invoice_type == "standard":
-            btn_del_col = 7
-            btn_mod_col = 8
-            btn_sel_col = 9
-        else:  # proforma
-            btn_del_col = 6
-            btn_mod_col = 7
-            btn_sel_col = 8
 
         self.product_table.setCellWidget(row, btn_del_col, btn_del)
         self.product_table.setCellWidget(row, btn_mod_col, btn_mod)
@@ -200,11 +208,11 @@ class ProductManager(QWidget):
             editable_cols = [1, 2, 3, 4, 5]
             amount_cols = [3, 4, 5]
             focus_col = 1
-        else:
+        else:  # proforma
             widget_col = 1
-            btn_col = 7
-            editable_cols = [1, 2, 3, 4]
-            amount_cols = [2, 3, 4]
+            btn_col = 6
+            editable_cols = [1, 2, 3]
+            amount_cols = [1, 2, 3]
             focus_col = 1
         widget = self.product_table.cellWidget(row, widget_col)
         btn = self.product_table.cellWidget(row, btn_col)
@@ -255,12 +263,10 @@ class ProductManager(QWidget):
             micro_col = 5
             subtotal_col = 6
         else:  # proforma
-            ref_col = None
-            num_act_col = 1
-            physico_col = 2
-            toxico_col = 3
-            micro_col = 4
-            subtotal_col = 5
+            physico_col = 1
+            toxico_col = 2
+            micro_col = 3
+            subtotal_col = 4
 
         physico_widget = self.product_table.cellWidget(row, physico_col)
         toxico_widget = self.product_table.cellWidget(row, toxico_col)
@@ -279,10 +285,11 @@ class ProductManager(QWidget):
         # Mise à jour immédiate dans la base et interface
         pid = self.product_table.item(row, 0).data(Qt.UserRole)
         if self.invoice_type == "standard":
-            ref = int(self.parse_number(self.product_table.cellWidget(row, ref_col).text()))
+            ref = int(self.parse_number(self.product_table.cellWidget(row, 1).text()))
+            num_act = self.product_table.cellWidget(row, 2).text()
         else:
             ref = 0  # Not used for proforma
-        num_act = self.product_table.cellWidget(row, num_act_col).text()
+            num_act = ""  # Not used for proforma
 
         # Persist numeric components but DO NOT change ref here (ref is managed in-memory until save)
         self.product_service.update_product(pid, ref, num_act,
@@ -293,7 +300,7 @@ class ProductManager(QWidget):
                        update_ref=False)
 
     def toggle_select(self, pid, row):
-        btn_col = 9 if self.invoice_type == "standard" else 8
+        btn_col = 9 if self.invoice_type == "standard" else 7
         btn = self.product_table.cellWidget(row, btn_col)
         ref_col = 1 if self.invoice_type == "standard" else None
         currently_selected = bool(self.selected_products.get(pid, False))
@@ -352,7 +359,7 @@ class ProductManager(QWidget):
         if self.invoice_type == "standard":
             editable_cols = [1, 2, 3, 4, 5]
         else:
-            editable_cols = [1, 2, 3, 4]
+            editable_cols = [1, 2, 3]
         for col in editable_cols:
             widget = self.product_table.cellWidget(row, col)
             if widget:
@@ -368,7 +375,7 @@ class ProductManager(QWidget):
         if self.invoice_type == "standard":
             editable_cols = [1, 2, 3, 4, 5]
         else:
-            editable_cols = [1, 2, 3, 4]
+            editable_cols = [1, 2, 3]
         for col in editable_cols:
             widget = self.product_table.cellWidget(row, col)
             if widget:
@@ -430,7 +437,7 @@ class ProductManager(QWidget):
                     continue
                 item_pid = row_item.data(Qt.UserRole)
                 if item_pid == pid:
-                    btn_col = 9 if self.invoice_type == "standard" else 8
+                    btn_col = 9 if self.invoice_type == "standard" else 7
                     btn = self.product_table.cellWidget(row, btn_col)
                     if btn:
                         btn.setText("Annuler")
@@ -473,7 +480,7 @@ class ProductManager(QWidget):
                 for row in range(self.product_table.rowCount()):
                     item_pid = self.product_table.item(row, 0)
                     if item_pid and item_pid.data(Qt.UserRole) == pid:
-                        btn_col = 9 if self.invoice_type == "standard" else 8
+                        btn_col = 9 if self.invoice_type == "standard" else 7
                         btn = self.product_table.cellWidget(row, btn_col)
                         if btn:
                             btn.setText("Select")
@@ -500,6 +507,9 @@ class ProductManager(QWidget):
                                     self.product_service.update_product(pid, new, num_act, physico, toxico, micro, subtotal, update_ref=False)
                             except Exception:
                                 pass
+                        else:  # proforma
+                            # For proforma, no ref or num_act. Just update physico/toxico/micro
+                            pass  # Selection is UI-only for proforma, no DB update needed
                         self.selected_products[pid] = False
                         self.clear_selection_style(row)
                         # also remove from selection order

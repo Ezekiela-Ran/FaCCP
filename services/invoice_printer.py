@@ -137,14 +137,23 @@ class InvoicePrinter:
             micro    = escape(str(prod.get('micro',         '') or ''))
             toxico   = escape(str(prod.get('toxico',        '') or ''))
             subtotal = escape(str(prod.get('subtotal',      '') or ''))
-            rows += (f'<tr style="font-size:11pt;line-height:1.6;"><td style="border:1px solid #000;padding:8pt 8pt;">{ref_b}</td><td style="border:1px solid #000;padding:8pt 8pt;">{desig}</td><td style="border:1px solid #000;padding:8pt 8pt;">{num_act}</td>'
-                     f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{physico}</td>'
-                     f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{micro}</td>'
-                     f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{toxico}</td>'
-                     f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{subtotal}</td></tr>')
+            
+            if invoice_type == 'standard':
+                rows += (f'<tr style="font-size:11pt;line-height:1.6;"><td style="border:1px solid #000;padding:8pt 8pt;">{ref_b}</td><td style="border:1px solid #000;padding:8pt 8pt;">{desig}</td><td style="border:1px solid #000;padding:8pt 8pt;">{num_act}</td>'
+                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{physico}</td>'
+                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{micro}</td>'
+                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{toxico}</td>'
+                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{subtotal}</td></tr>')
+            else:  # proforma
+                rows += (f'<tr style="font-size:11pt;line-height:1.6;"><td style="border:1px solid #000;padding:8pt 8pt;">{desig}</td>'
+                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{physico}</td>'
+                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{micro}</td>'
+                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{toxico}</td>'
+                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{subtotal}</td></tr>')
 
         # ---- SECTION MÉTADONNÉES au-dessus du tableau ----
-        metadata = f"""
+        if invoice_type == 'standard':
+            metadata = f"""
 <table width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:0 0 4pt 0;">
   <tr>
     <td width="25%" style="padding:4pt 8pt;font-style:italic;font-size:9pt;"><strong>Date d'émission:</strong> {issue_label}</td>
@@ -154,8 +163,18 @@ class InvoicePrinter:
   </tr>
 </table>
 """
+        else:  # proforma
+            metadata = f"""
+<table width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:0 0 4pt 0;">
+  <tr>
+    <td width="50%" style="padding:4pt 8pt;font-style:italic;font-size:9pt;"><strong>Date:</strong> {issue_label}</td>
+    <td width="50%" style="padding:4pt 8pt;font-style:italic;font-size:9pt;"><strong>Responsable:</strong> {responsable}</td>
+  </tr>
+</table>
+"""
 
-        table = f"""
+        if invoice_type == 'standard':
+            table = f"""
 <table class="invoice-table" cellspacing="0" cellpadding="0" style="width:100%;margin:0;">
   <thead>
     <tr style="background-color:#e8e8e8;">
@@ -174,6 +193,29 @@ class InvoicePrinter:
   <tfoot>
     <tr style="font-style:italic;font-size:11pt;font-weight:bold;">
       <td style="text-align:right;padding:8pt;border:1px solid #000;border-top:1.5px solid #000;" colspan="5">Montant à payer</td>
+      <td style="text-align:right;padding:8pt;border:1px solid #000;border-top:1.5px solid #000;" colspan="2">{total_formatted} Ar</td>
+    </tr>
+  </tfoot>
+</table>
+"""
+        else:  # proforma
+            table = f"""
+<table class="invoice-table" cellspacing="0" cellpadding="0" style="width:100%;margin:0;">
+  <thead>
+    <tr style="background-color:#e8e8e8;">
+      <th style="width:30%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Désignations</th>
+      <th style="width:17.5%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Physico<br>chimique</th>
+      <th style="width:17.5%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Micro-<br>biologique</th>
+      <th style="width:17.5%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Toxico-<br>logique</th>
+      <th style="width:17.5%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Sous-total</th>
+    </tr>
+  </thead>
+  <tbody>
+{rows}
+  </tbody>
+  <tfoot>
+    <tr style="font-style:italic;font-size:11pt;font-weight:bold;">
+      <td style="text-align:right;padding:8pt;border:1px solid #000;border-top:1.5px solid #000;" colspan="3">Montant à payer</td>
       <td style="text-align:right;padding:8pt;border:1px solid #000;border-top:1.5px solid #000;" colspan="2">{total_formatted} Ar</td>
     </tr>
   </tfoot>

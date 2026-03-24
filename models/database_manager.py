@@ -265,6 +265,14 @@ class DatabaseManager(Tables):
         )
         self.conn.commit()
 
+    def product_is_used_in_records(self, product_id):
+        self.cursor.execute(
+            "SELECT COUNT(*) AS cnt FROM invoice_client WHERE product_id=%s",
+            (product_id,)
+        )
+        row = self.cursor.fetchone()
+        return (row["cnt"] if row else 0) > 0
+
     def delete_product(self, product_id):
         self.cursor.execute("DELETE FROM products WHERE id=%s", (product_id,))
         self.conn.commit()

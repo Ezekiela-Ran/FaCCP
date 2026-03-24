@@ -396,6 +396,14 @@ class ProductManager(QWidget):
     def delete_product_row(self, pid, row):
         if self.loaded_record_locked:
             return
+        if self.product_service.db.product_is_used_in_records(pid):
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "Suppression impossible",
+                "Ce produit ne peut pas être supprimé car il est déjà utilisé dans des enregistrements."
+            )
+            return
         self.product_service.delete_product(pid)
         self.product_table.removeRow(row)
 

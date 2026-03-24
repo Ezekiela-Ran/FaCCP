@@ -212,6 +212,17 @@ class DatabaseManager(Tables):
         finally:
             cursor.close()
 
+    def update_type_name(self, type_id: int, name: str):
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE product_type SET product_type_name=%s WHERE id=%s",
+                (name, type_id),
+            )
+            self.conn.commit()
+        finally:
+            cursor.close()
+
     def delete_type(self, type_id: int):
         cursor = self.conn.cursor()
         try:
@@ -246,6 +257,13 @@ class DatabaseManager(Tables):
         )
         self.conn.commit()
         return self.cursor.lastrowid
+
+    def update_product_name(self, product_id, product_name):
+        self.cursor.execute(
+            "UPDATE products SET product_name=%s WHERE id=%s",
+            (product_name, product_id),
+        )
+        self.conn.commit()
 
     def delete_product(self, product_id):
         self.cursor.execute("DELETE FROM products WHERE id=%s", (product_id,))

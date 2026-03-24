@@ -31,12 +31,15 @@ class ProductManager(QWidget):
         self.label.setObjectName("categoryTitle")
         self.add_type_btn = QPushButton("Ajouter")
         self.add_type_btn.setObjectName("categoryActionButton")
+        self.edit_type_btn = QPushButton("Modifier")
+        self.edit_type_btn.setObjectName("categoryActionButton")
         self.del_type_btn = QPushButton("Supprimer")
         self.del_type_btn.setObjectName("categoryActionButton")
         self.type_list = QListWidget()
 
         type_list_layout.addWidget(self.label)
         type_list_layout.addWidget(self.add_type_btn)
+        type_list_layout.addWidget(self.edit_type_btn)
         type_list_layout.addWidget(self.del_type_btn)
         type_list_layout.addWidget(self.type_list)
         
@@ -70,6 +73,7 @@ class ProductManager(QWidget):
 
         # Connexions
         self.add_type_btn.clicked.connect(self.add_type)
+        self.edit_type_btn.clicked.connect(self.edit_type)
         self.del_type_btn.clicked.connect(self.del_type)
         self.add_product_btn.clicked.connect(self.add_product)
         self.type_list.itemSelectionChanged.connect(self.load_products)
@@ -99,6 +103,20 @@ class ProductManager(QWidget):
         if ok and name:
             self.product_service.insert_type(name)
             self.load_types()
+
+    def edit_type(self):
+        item = self.type_list.currentItem()
+        if not item:
+            return
+        tid = item.data(Qt.UserRole)
+        if tid is None:
+            return
+        current_name = item.text().strip()
+        name, ok = QInputDialog.getText(self, "Modifier le type", "Nom du type:", text=current_name)
+        name = (name or "").strip()
+        if ok and name:
+            self.product_service.update_type_name(tid, name)
+            item.setText(name)
 
     def del_type(self):
         item = self.type_list.currentItem()
@@ -214,6 +232,12 @@ class ProductManager(QWidget):
             self.apply_selection_style(row)
 
     def toggle_edit(self, row):
+        designation_item = self.product_table.item(row, 0)
+        if designation_item is None:
+            return
+        pid = designation_item.data(Qt.UserRole)
+        if pid is None:
+            return
         if self.invoice_type == "standard":
             # Col 1 (ref) est cachée — utiliser col 2 (N°Acte, visible) comme sentinel
             widget_col = 2
@@ -232,6 +256,7 @@ class ProductManager(QWidget):
         if widget.isReadOnly():
             # Start edit (subtotal reste non modifiable)
             btn.setText("Sauver")
+            self._begin_designation_edit(row)
             # Remove display formatting while editing amount fields.
             for col in amount_cols:
                 amount_widget = self.product_table.cellWidget(row, col)
@@ -244,6 +269,8 @@ class ProductManager(QWidget):
             # Save edit
             if self.invoice_type == "standard" and not self.validate_num_act_row(row):
                 self.product_table.cellWidget(row, 2).setFocus()
+                return
+            if not self._save_designation_edit(row, pid):
                 return
             btn.setText("Modifier")
             self.on_price_component_changed(row)
@@ -269,6 +296,43 @@ class ProductManager(QWidget):
             if self.product_table.cellWidget(row, column) is button:
                 return row
         return -1
+
+    def _begin_designation_edit(self, row):
+        if self.product_table.cellWidget(row, 0) is not None:
+            return
+        item = self.product_table.item(row, 0)
+        if item is None:
+            return
+        designation_edit = QLineEdit(item.text())
+        if self.selected_products.get(item.data(Qt.UserRole), False):
+            designation_edit.setProperty("selectedRow", True)
+            designation_edit.style().unpolish(designation_edit)
+            designation_edit.style().polish(designation_edit)
+        self.product_table.setCellWidget(row, 0, designation_edit)
+        designation_edit.selectAll()
+        designation_edit.setFocus()
+
+    def _save_designation_edit(self, row, pid):
+        designation_edit = self.product_table.cellWidget(row, 0)
+        if designation_edit is None:
+            return True
+
+        new_name = designation_edit.text().strip()
+        if not new_name:
+            QMessageBox.warning(self, "Désignation invalide", "La désignation du produit ne peut pas être vide.")
+            designation_edit.setFocus()
+            return False
+
+        item = self.product_table.item(row, 0)
+        if item is None:
+            return False
+
+        if new_name != item.text().strip():
+            self.product_service.update_product_name(pid, new_name)
+            item.setText(new_name)
+
+        self.product_table.removeCellWidget(row, 0)
+        return True
 
     def format_number(self, value):
         v = self.parse_number(value)
@@ -595,6 +659,8 @@ class ProductManager(QWidget):
         btn_mod = self.product_table.cellWidget(row, btn_mod_col)
         if btn_mod:
             btn_mod.setText("Modifier")
+        if self.product_table.cellWidget(row, 0) is not None:
+            self.product_table.removeCellWidget(row, 0)
         for col in amount_cols:
             w = self.product_table.cellWidget(row, col)
             if w:

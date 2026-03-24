@@ -19,6 +19,9 @@ class ProductService:
     def add_product(self, type_id, name):
         return self.db.add_product(type_id, name)
 
+    def update_product_name(self, pid, name):
+        return self.db.update_product_name(pid, name)
+
     def is_num_act_unique(self, num_act, exclude_product_id=None):
         return self.db.is_num_act_unique(num_act, exclude_product_id=exclude_product_id)
 
@@ -32,6 +35,9 @@ class ProductService:
 
     def insert_type(self, name):
         return self.db.insert_type(name)
+
+    def update_type_name(self, tid, name):
+        return self.db.update_type_name(tid, name)
 
     def delete_type(self, tid):
         return self.db.delete_type(tid)

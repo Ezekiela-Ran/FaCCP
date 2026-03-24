@@ -1,11 +1,16 @@
 from pathlib import Path
 from html import escape
+import tempfile
+import subprocess
+import os
 
-from PySide6 import QtWidgets
-from PySide6.QtCore import QMarginsF
-from PySide6.QtGui import QTextDocument, QPageSize, QPageLayout
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 from PySide6.QtWidgets import QMessageBox
-from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog, QPrintDialog
 
 from utils.text_utils import TextUtils
 
@@ -16,7 +21,7 @@ class InvoicePrinter:
 
     def _resolve_logo_src(self):
         logo_path = Path(__file__).resolve().parent.parent / "images" / "image.png"
-        return logo_path.as_uri() if logo_path.exists() else ""
+        return str(logo_path) if logo_path.exists() else ""
 
     def _load_print_css(self):
         try:
@@ -26,292 +31,308 @@ class InvoicePrinter:
             return ""
 
     def generate_invoice_html(self, form, invoice_type, selected_products, db_manager, ref_mapping=None, num_act_mapping=None):
-        company_name    = form.company_name_input.text().strip()
-        responsable     = form.responsable_input.text().strip()
-        stat            = form.stat_input.text().strip()
-        nif             = form.nif_input.text().strip()
-        address         = form.address_input.text().strip() if hasattr(form, 'address_input') else ""
+        """Extrait les données et les stocke pour la génération PDF reportlab"""
+        # Stocker les données pour utilisation ultérieure dans generate_pdf_from_html
+        self._invoice_data = {
+            'form': form,
+            'invoice_type': invoice_type,
+            'selected_products': selected_products,
+            'db_manager': db_manager,
+            'ref_mapping': ref_mapping,
+            'num_act_mapping': num_act_mapping
+        }
+        # Retourner un placeholder pour compatibilité
+        return "<html><body>Facture générée avec reportlab</body></html>"
 
+    def _generate_reportlab_elements(self):
+        """Génère les éléments reportlab pour la facture"""
+        if not hasattr(self, '_invoice_data'):
+            return []
+        
+        data = self._invoice_data
+        form = data['form']
+        invoice_type = data['invoice_type']
+        selected_products = data['selected_products']
+        db_manager = data['db_manager']
+        ref_mapping = data.get('ref_mapping')
+        num_act_mapping = data.get('num_act_mapping') or {}
+        
+        # Extraire les données du formulaire
+        company_name = form.company_name_input.text().strip()
+        responsable = form.responsable_input.text().strip()
+        stat = form.stat_input.text().strip()
+        nif = form.nif_input.text().strip()
+        address = form.address_input.text().strip() if hasattr(form, 'address_input') else ""
+        
         if invoice_type == 'standard':
-            date_issue      = form.date_issue_input.date().toString('dd/MM/yyyy') if hasattr(form, 'date_issue_input') else ''
-            date_result     = form.date_result_input.date().toString('dd/MM/yyyy') if hasattr(form, 'date_result_input') else ''
+            date_issue = form.date_issue_input.date().toString('dd/MM/yyyy') if hasattr(form, 'date_issue_input') else ''
+            date_result = form.date_result_input.date().toString('dd/MM/yyyy') if hasattr(form, 'date_result_input') else ''
             product_ref_raw = form.product_ref_input.text() if hasattr(form, 'product_ref_input') else ''
-            title           = 'FACTURE'
+            title = 'FACTURE'
         else:
-            date_issue      = form.date_input.date().toString('dd/MM/yyyy') if hasattr(form, 'date_input') else ''
-            date_result     = ''
+            date_issue = form.date_input.date().toString('dd/MM/yyyy') if hasattr(form, 'date_input') else ''
+            date_result = ''
             product_ref_raw = ''
-            title           = 'FACTURE PROFORMA'
-
+            title = 'FACTURE PROFORMA'
+        
+        # Récupérer les produits
         products = []
-        num_act_mapping = num_act_mapping or {}
         for pid in selected_products:
-          prod = db_manager.get_product_by_id(pid)
-          if not prod:
-            continue
-          # prefer ref from ref_mapping (in-memory dynamic numbering) if provided
-          if ref_mapping and pid in ref_mapping:
-            prod = dict(prod)  # shallow copy
-            prod['ref_b_analyse'] = ref_mapping.get(pid)
-          if pid in num_act_mapping:
-            if not isinstance(prod, dict):
-              prod = dict(prod)
-            prod['num_act'] = num_act_mapping.get(pid)
-          products.append(prod)
-        total           = sum(float(p.get('subtotal', 0) or 0) for p in products)
-        total_formatted = f"{total:,.0f}".replace(',', '\u00a0')
-        total_words     = TextUtils.number_to_words(round(total)).upper()
+            prod = db_manager.get_product_by_id(pid)
+            if not prod:
+                continue
+            if ref_mapping and pid in ref_mapping:
+                prod = dict(prod)
+                prod['ref_b_analyse'] = ref_mapping.get(pid)
+            if pid in num_act_mapping:
+                if not isinstance(prod, dict):
+                    prod = dict(prod)
+                prod['num_act'] = num_act_mapping.get(pid)
+            products.append(prod)
+        
+        total = sum(float(p.get('subtotal', 0) or 0) for p in products)
+        total_formatted = f"{total:,.0f}".replace(',', ' ')
+        total_words = TextUtils.number_to_words(round(total)).upper()
+        
+        # Créer les styles
+        styles = getSampleStyleSheet()
+        titre_style = ParagraphStyle(
+            name="TitreCentree",
+            parent=styles['Normal'],
+            fontSize=11,
+            alignment=TA_CENTER,
+            fontName='Helvetica-Bold'
+        )
+        
+        elements = []
+        logo_path = self._resolve_logo_src()
+        
+        # HEADER AVEC LOGO ET AGENCE
+        try:
+            logo = Image(logo_path, width=100, height=80)
+        except:
+            logo = None
+        
+        # Titre dans le header
+        titre = Paragraph(
+            "<b>AGENCE DE CONTRÔLE DE<br/>LA SECURITE SANITAIRE<br/>ET DE LA QUALITE DES<br/>DENREES ALIMENTAIRES</b>",
+            titre_style
+        )
+        
+        # Tableau DOIT (droite)
+        right_header = [
+            ["DOIT"],
+            [f"Raison social: {company_name}"],
+            [f"Statistique: {stat}"],
+            [f"NIF: {nif}"],
+            [f"Adresse: {address}"],
+        ]
+        
+        right_table = Table(right_header)
+        right_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ]))
+        
+        # Tableau GAUCHE (agence + titre)
+        left_header = [
+            [logo if logo else "", titre, "", right_table],
+            [""],
+            ["NIF: 2001451249"],
+            ["STAT: 86,909,112,006,001,800"],
+            ["TEL: 22 222 39"],
+            ["Adresse: Rue Karidja Tsaralalàna"],
+        ]
+        
+        left_table = Table(left_header, colWidths=[100, 150, 50, 200])
+        left_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1),'TOP'),
+            ('LEFTPADDING', (0,0), (0,0), 0),
+            ('RIGHTPADDING', (0,0), (0,0), 10),
+            ('TOPPADDING', (1,0), (1,0), 10),
+            ('BOX', (3,0), (3,0), 0.5, colors.black),
+            ('LINEABOVE', (1,0), (1,0), 1, colors.black),
+            ('LINEBELOW', (1,0), (1,0), 1, colors.black),   
+        ]))
+        
+        header_main = Table([[left_table]])
+        elements.append(header_main)
+        elements.append(Spacer(1, 20))
+        
+        # TITLE
+        title_para = Paragraph(f"<b>{title}</b>", titre_style)
+        elements.append(title_para)
+        elements.append(Spacer(1, 10))
+        
+        # METADATA TABLE
+        if invoice_type == 'standard':
+            metadata_data = [
+                [f"Date d'émission: {date_issue}", f"Référence produits: {product_ref_raw}", f"Date résultat: {date_result}", f"Responsable: {responsable}"]
+            ]
+        else:
+            metadata_data = [
+                [f"Date: {date_issue}", f"Responsable: {responsable}"]
+            ]
+        
+        metadata_table = Table(metadata_data)
+        metadata_table.setStyle(TableStyle([
+            ('FONTSIZE', (0,0), (-1,-1), 9),
+            ('LEFTPADDING', (0,0), (-1,-1), 5),
+            ('RIGHTPADDING', (0,0), (-1,-1), 5),
+        ]))
+        elements.append(metadata_table)
+        elements.append(Spacer(1, 10))
+        
+        # PRODUCTS TABLE
+        if invoice_type == 'standard':
+            header_row = ['Réf. Bulletin', 'Désignations', 'N°Acte', 'Physico', 'Micro', 'Toxico', 'Sous-total']
+            data_rows = [header_row]
+            for prod in products:
+                data_rows.append([
+                    str(prod.get('ref_b_analyse', '') or ''),
+                    str(prod.get('product_name', '') or ''),
+                    str(prod.get('num_act', '') or ''),
+                    str(prod.get('physico', '') or ''),
+                    str(prod.get('micro', '') or ''),
+                    str(prod.get('toxico', '') or ''),
+                    str(prod.get('subtotal', '') or ''),
+                ])
+            data_rows.append(['', '', '', '', '', 'Montant à payer', total_formatted + ' Ar'])
+        else:
+            header_row = ['Désignations', 'Physico', 'Micro', 'Toxico', 'Sous-total']
+            data_rows = [header_row]
+            for prod in products:
+                data_rows.append([
+                    str(prod.get('product_name', '') or ''),
+                    str(prod.get('physico', '') or ''),
+                    str(prod.get('micro', '') or ''),
+                    str(prod.get('toxico', '') or ''),
+                    str(prod.get('subtotal', '') or ''),
+                ])
+            data_rows.append(['', '', '', '', 'Montant à payer', total_formatted + ' Ar'])
+        
+        page_width = A4[0] - 60  # (30 marge gauche + 30 droite)
 
-        company_name = escape(company_name)
-        responsable  = escape(responsable)
-        stat         = escape(stat)
-        nif          = escape(nif)
-        address      = escape(address)
-        issue_label  = escape(date_issue)
-        result_label = escape(date_result)
-        product_ref  = escape(product_ref_raw)
+        products_table = Table(
+            data_rows,
+            colWidths=[
+                page_width * 0.12,  # Réf
+                page_width * 0.22,  # Désignations (plus large)
+                page_width * 0.12,  # N°Acte
+                page_width * 0.11,  # Physico
+                page_width * 0.11,  # Micro
+                page_width * 0.11,  # Toxico
+                page_width * 0.21,  # Sous-total (plus large)
+            ]
+        )
+        
+        products_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.grey),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,0), 9),
+            ('BOTTOMPADDING', (0,0), (-1,0), 12),
+            ('BACKGROUND', (0,-1), (-1,-1), colors.beige),
 
-        logo_src = self._resolve_logo_src()
-        logo_tag = (f'<img src="{logo_src}" width="90" height="75" style="object-fit:contain;">'
-                    if logo_src else '<span style="display:inline-block;width:90px;height:75px;"></span>')
+            ('FONTSIZE', (0,1), (-1,-1), 8),
+            ('ALIGN', (0,1), (-1,-2), 'CENTER'),
 
-        # ---- ENTÊTE: tableau HTML 2 colonnes (agency | DOIT box) ----
-        header = f"""
-<table width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:0 0 4pt 0;">
-  <tr>
-    <td width="68%" valign="middle" style="padding-right:8pt;">
-      <table cellspacing="0" cellpadding="0" border="0" width="100%">
-        <tr>
-          <td width="90" valign="top" style="text-align:center;padding-right:8pt;padding-bottom:4pt;">{logo_tag}</td>
-          <td valign="middle" style="border-top:1.5px solid #000;border-bottom:1.5px solid #000;
-              padding:6pt 8pt;font-size:11pt;font-weight:bold;
-              text-transform:uppercase;line-height:1.4;vertical-align:middle;">
-            AGENCE DE CONTRÔLE DE<br>
-            LA SECURITE SANITAIRE<br>
-            ET DE LA QUALITE DES<br>
-            DENREES ALIMENTAIRES
-          </td>
-        </tr>
-      </table>
-      <table cellspacing="0" cellpadding="3" border="0" style="margin-top:6pt;width:100%;">
-        <tr>
-          <td style="width:50pt;font-style:italic;font-size:9pt;font-weight:bold;">NIF:</td>
-          <td style="font-style:italic;font-size:9pt;">2001451249</td>
-        </tr>
-        <tr>
-          <td style="font-style:italic;font-size:9pt;font-weight:bold;">STAT:</td>
-          <td style="font-style:italic;font-size:9pt;">86,909,112,006,001,800</td>
-        </tr>
-        <tr>
-          <td style="font-style:italic;font-size:9pt;font-weight:bold;">TEL:</td>
-          <td style="font-style:italic;font-size:9pt;">22 222 39</td>
-        </tr>
-        <tr>
-          <td style="font-style:italic;font-size:9pt;font-weight:bold;">Adresse:</td>
-          <td style="font-style:italic;font-size:9pt;">Rue Karidja Tsaralalàna<br>(Ex Bâtiment Pharmacie Centrale Face Hôtel de Police)</td>
-        </tr>
-      </table>
-    </td>
-    <td width="32%" valign="top" style="border:1.5px solid #000;padding:0;min-height:200px;">
-      <table width="100%" cellspacing="0" cellpadding="0" border="0" style="height:100%;">
-        <tr>
-          <td align="center" style="font-size:14pt;font-weight:bold;padding:6pt 0;border-bottom:1px solid #000;">DOIT</td>
-        </tr>
-        <tr style="height:100%;">
-          <td style="padding:8pt;vertical-align:bottom;">
-            <p style="font-style:italic;font-size:9pt;margin:0 0 6pt 0;"><strong>Raison social:</strong> {company_name}</p>
-            <p style="font-style:italic;font-size:9pt;margin:0 0 6pt 0;"><strong>Statistique:</strong> {stat}</p>
-            <p style="font-style:italic;font-size:9pt;margin:0 0 6pt 0;"><strong>NIF:</strong> {nif}</p>
-            <p style="font-style:italic;font-size:9pt;margin:0;"><strong>Adresse:</strong> {address}</p>
-          </td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-</table>
-<h2 style="text-align:center;font-style:italic;font-weight:bold;font-size:18pt;margin:4pt 0;">{title}</h2>
-"""
+            ('BACKGROUND', (0,-1), (-1,-1), colors.beige),
 
-        # ---- Création des lignes de produits ----
-        rows = ''
-        for prod in products:
-            ref_b    = escape(str(prod.get('ref_b_analyse', '') or ''))
-            desig    = escape(str(prod.get('product_name',  '') or ''))
-            num_act  = escape(str(prod.get('num_act',       '') or ''))
-            physico  = escape(str(prod.get('physico',       '') or ''))
-            micro    = escape(str(prod.get('micro',         '') or ''))
-            toxico   = escape(str(prod.get('toxico',        '') or ''))
-            subtotal = escape(str(prod.get('subtotal',      '') or ''))
+            ('SPAN', (0,-1), (-3,-1)),
+            ('ALIGN', (-2,-1), (-2,-1), 'RIGHT'),
+            ('FONTNAME', (-1,-1), (-1,-1), 'Helvetica-Bold'),
+            ('ALIGN', (-1,-1), (-1,-1), 'RIGHT'),
+            ('GRID', (0,0), (-1,-2), 1, colors.black),
             
-            if invoice_type == 'standard':
-                rows += (f'<tr style="font-size:11pt;line-height:1.6;"><td style="border:1px solid #000;padding:8pt 8pt;">{ref_b}</td><td style="border:1px solid #000;padding:8pt 8pt;">{desig}</td><td style="border:1px solid #000;padding:8pt 8pt;">{num_act}</td>'
-                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{physico}</td>'
-                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{micro}</td>'
-                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{toxico}</td>'
-                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{subtotal}</td></tr>')
-            else:  # proforma
-                rows += (f'<tr style="font-size:11pt;line-height:1.6;"><td style="border:1px solid #000;padding:8pt 8pt;">{desig}</td>'
-                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{physico}</td>'
-                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{micro}</td>'
-                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{toxico}</td>'
-                         f'<td style="text-align:right;border:1px solid #000;padding:8pt 8pt;">{subtotal}</td></tr>')
+        ]))
+        elements.append(products_table)
+        elements.append(Spacer(1, 20))
+        
+        # FOOTER
+        footer_text = f"Arrêtée la présente facture à la somme de: {total_words} ARIARY"
+        footer_para = Paragraph(f"<b>{footer_text}</b>", styles['Normal'])
+        elements.append(footer_para)
+        elements.append(Spacer(1, 10))
+        
+        # Signature lines
+        sig_table = Table([
+            ['Le Client', 'Le(a) Caissier(e)']
+        ])
+        sig_table.setStyle(TableStyle([
+            ('LEFTPADDING', (0,0), (-1,-1), 50),
+            ('RIGHTPADDING', (0,0), (-1,-1), 50),
+            ('TOPPADDING', (0,0), (-1,-1), 40),
+            ('LINEABOVE', (0,0), (-1,0), 1, colors.black),
+            ('LINEABOVE', (1,0), (1,0), 1, colors.black),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('FONTSIZE', (0,0), (-1,-1), 9),
+        ]))
+        elements.append(sig_table)
+        
+        return elements
 
-        # ---- SECTION MÉTADONNÉES au-dessus du tableau ----
-        if invoice_type == 'standard':
-            metadata = f"""
-<table width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:0 0 4pt 0;">
-  <tr>
-    <td width="25%" style="padding:4pt 8pt;font-style:italic;font-size:9pt;"><strong>Date d'émission:</strong> {issue_label}</td>
-    <td width="25%" style="padding:4pt 8pt;font-style:italic;font-size:9pt;"><strong>Référence(s) produits:</strong> {product_ref}</td>
-    <td width="25%" style="padding:4pt 8pt;font-style:italic;font-size:9pt;"><strong>Date du résultat:</strong> {result_label}</td>
-    <td width="25%" style="padding:4pt 8pt;font-style:italic;font-size:9pt;"><strong>Responsable:</strong> {responsable}</td>
-  </tr>
-</table>
-"""
-        else:  # proforma
-            metadata = f"""
-<table width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:0 0 4pt 0;">
-  <tr>
-    <td width="50%" style="padding:4pt 8pt;font-style:italic;font-size:9pt;"><strong>Date:</strong> {issue_label}</td>
-    <td width="50%" style="padding:4pt 8pt;font-style:italic;font-size:9pt;"><strong>Responsable:</strong> {responsable}</td>
-  </tr>
-</table>
-"""
+    def generate_pdf_from_html(self, html, output_path):
+        """Génère le PDF avec reportlab"""
+        try:
+            elements = self._generate_reportlab_elements()
+            if not elements:
+                QMessageBox.critical(self.parent, 'Erreur', 'Impossible de générer les éléments PDF')
+                return False
+            
+            doc = SimpleDocTemplate(
+                output_path,
+                pagesize=A4,
+                leftMargin=30,
+                rightMargin=30,
+                topMargin=30,
+                bottomMargin=30
+            )
+            doc.build(elements)
+            return True
+        except Exception as e:
+            QMessageBox.critical(self.parent, 'Erreur', f'Erreur lors de la génération du PDF: {str(e)}')
+            return False
 
-        if invoice_type == 'standard':
-            table = f"""
-<table class="invoice-table" cellspacing="0" cellpadding="0" style="width:100%;margin:0;">
-  <thead>
-    <tr style="background-color:#e8e8e8;">
-      <th style="width:12%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Réf.<br>Bulletin<br>d'analyse</th>
-      <th style="width:22%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Désignations</th>
-      <th style="width:14%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">N°Acte de<br>prélèvement</th>
-      <th style="width:12%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Physico<br>chimique</th>
-      <th style="width:12%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Micro-<br>biologique</th>
-      <th style="width:12%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Toxico-<br>logique</th>
-      <th style="width:16%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Sous-total</th>
-    </tr>
-  </thead>
-  <tbody>
-{rows}
-  </tbody>
-  <tfoot>
-    <tr style="font-style:italic;font-size:11pt;font-weight:bold;">
-      <td style="text-align:right;padding:8pt;border:1px solid #000;border-top:1.5px solid #000;" colspan="5">Montant à payer</td>
-      <td style="text-align:right;padding:8pt;border:1px solid #000;border-top:1.5px solid #000;" colspan="2">{total_formatted} Ar</td>
-    </tr>
-  </tfoot>
-</table>
-"""
-        else:  # proforma
-            table = f"""
-<table class="invoice-table" cellspacing="0" cellpadding="0" style="width:100%;margin:0;">
-  <thead>
-    <tr style="background-color:#e8e8e8;">
-      <th style="width:30%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Désignations</th>
-      <th style="width:17.5%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Physico<br>chimique</th>
-      <th style="width:17.5%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Micro-<br>biologique</th>
-      <th style="width:17.5%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Toxico-<br>logique</th>
-      <th style="width:17.5%;font-weight:bold;font-style:italic;font-size:10pt;border:1px solid #000;padding:8pt 8pt;min-height:32pt;">Sous-total</th>
-    </tr>
-  </thead>
-  <tbody>
-{rows}
-  </tbody>
-  <tfoot>
-    <tr style="font-style:italic;font-size:11pt;font-weight:bold;">
-      <td style="text-align:right;padding:8pt;border:1px solid #000;border-top:1.5px solid #000;" colspan="3">Montant à payer</td>
-      <td style="text-align:right;padding:8pt;border:1px solid #000;border-top:1.5px solid #000;" colspan="2">{total_formatted} Ar</td>
-    </tr>
-  </tfoot>
-</table>
-"""
-
-        # ---- PIED DE PAGE ----
-        footer = f"""
-<div class="invoice-footer">
-  <p style="margin:12pt 0 6pt;font-weight:bold;font-style:italic;font-size:10pt;">Arrêtée la présente facture à la somme de&nbsp;: {escape(total_words)} ARIARY</p>
-  <p style="margin:6pt 0;font-style:italic;font-size:10pt;">Mode de paiement
-    <span style="margin-left:30pt;">☐ Espèces</span>
-    <span style="margin-left:44pt;">☐ Chèque</span>
-  </p>
-  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:28pt;">
-    <tr>
-      <td width="50%" style="text-align:center;font-size:9pt;border-top:1.5px solid #000;padding-top:6pt;">Le Client</td>
-      <td width="50%" style="text-align:center;font-size:9pt;border-top:1.5px solid #000;padding-top:6pt;">Le(a) Caissier(e)</td>
-    </tr>
-  </table>
-  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:22pt;">
-    <tr>
-      <td style="font-size:8pt;">(*) Chèque visé à l'ordre de Madame le RECEVEUR GENERAL .</td>
-      <td align="right" style="font-size:8pt;">Quittance N°______________</td>
-    </tr>
-  </table>
-</div>
-"""
-
-        css = self._load_print_css()
-        return f"""<!DOCTYPE HTML>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>{css}</style>
-</head>
-<body>
-<div class="invoice-root">
-{header}
-{metadata}
-{table}
-{footer}
-</div>
-</body>
-</html>"""
 
 
     def preview_invoice(self, html):
         if not html:
-            QMessageBox.warning(self.parent, 'Aperçu impossible', 'Impossible de générer l’aperçu. Vérifiez les données.')
+            QMessageBox.warning(self.parent, 'Aperçu impossible', 'Impossible de générer l\'aperçu. Vérifiez les données.')
             return
 
-        printer = QPrinter(QPrinter.HighResolution)
-        printer.setPageLayout(
-            QPageLayout(
-                QPageSize(QPageSize.A4),
-                QPageLayout.Portrait,
-                QMarginsF(6, 6, 6, 6)
-            )
-        )
+        try:
+            # Créer un fichier PDF temporaire
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                tmp_path = tmp_file.name
 
-        def render_preview(p):
-            doc = QTextDocument()
-            doc.setDocumentMargin(0)
-            doc.setHtml(html)
-            doc.setPageSize(p.pageRect(QPrinter.Point).size())
-            doc.print_(p)
+            # Générer le PDF
+            if not self.generate_pdf_from_html(html, tmp_path):
+                return
 
-        preview = QPrintPreviewDialog(printer, self.parent)
-        preview.setWindowTitle('Aperçu de la facture')
-        preview.paintRequested.connect(render_preview)
-        preview.exec()
+            # Ouvrir le PDF avec le visionneur par défaut
+            subprocess.Popen(['xdg-open', tmp_path])
+            
+        except Exception as e:
+            QMessageBox.critical(self.parent, 'Erreur', f'Erreur lors de l\'aperçu: {str(e)}')
 
     def print_invoice(self, html):
         if not html:
-            QMessageBox.warning(self.parent, 'Impression impossible', 'Impossible de générer l’impression. Vérifiez les données.')
+            QMessageBox.warning(self.parent, 'Impression impossible', 'Impossible de générer l\'impression. Vérifiez les données.')
             return
 
-        printer = QPrinter(QPrinter.HighResolution)
-        printer.setPageLayout(
-            QPageLayout(
-                QPageSize(QPageSize.A4),
-                QPageLayout.Portrait,
-            QMarginsF(6, 6, 6, 6)
-            )
-        )
+        try:
+            # Créer un fichier PDF temporaire
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                tmp_path = tmp_file.name
 
-        dialog = QPrintDialog(printer, self.parent)
-        if dialog.exec() == QtWidgets.QDialog.Accepted:
-            doc = QTextDocument()
-            doc.setDocumentMargin(0)
-            doc.setHtml(html)
-            doc.setPageSize(printer.pageRect(QPrinter.Point).size())
-            doc.print_(printer)
+            # Générer le PDF
+            if not self.generate_pdf_from_html(html, tmp_path):
+                return
+
+            # Lancer la boîte de dialogue d'impression avec le fichier PDF
+            subprocess.Popen(['lp', tmp_path])
+            QMessageBox.information(self.parent, 'Impression', 'Document envoyé à l\'imprimante.')
+            
+        except Exception as e:
+            QMessageBox.critical(self.parent, 'Erreur', f'Erreur lors de l\'impression: {str(e)}')

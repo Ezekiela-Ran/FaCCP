@@ -198,7 +198,7 @@ class ProductManager(QWidget):
         self.product_table.setCellWidget(row, btn_sel_col, btn_sel)
 
         btn_del.clicked.connect(lambda: self.delete_product_row(pid, row))
-        btn_mod.clicked.connect(lambda: self.toggle_edit(row))
+        btn_mod.clicked.connect(self.toggle_edit_from_sender)
         btn_sel.clicked.connect(lambda: self.toggle_select(pid, row))
 
         btn_del.setEnabled(not self.loaded_record_locked)
@@ -215,11 +215,12 @@ class ProductManager(QWidget):
 
     def toggle_edit(self, row):
         if self.invoice_type == "standard":
-            widget_col = 1
+            # Col 1 (ref) est cachée — utiliser col 2 (N°Acte, visible) comme sentinel
+            widget_col = 2
             btn_col = 8
             editable_cols = [1, 2, 3, 4, 5]
             amount_cols = [3, 4, 5]
-            focus_col = 1
+            focus_col = 2
         else:  # proforma
             widget_col = 1
             btn_col = 6
@@ -252,6 +253,22 @@ class ProductManager(QWidget):
                     amount_widget.setText(self.format_number(amount_widget.text()))
             for col in editable_cols:
                 self.product_table.cellWidget(row, col).setReadOnly(True)
+
+    def toggle_edit_from_sender(self):
+        button = self.sender()
+        if button is None:
+            return
+        btn_col = 8 if self.invoice_type == "standard" else 6
+        row = self._find_row_for_button(button, btn_col)
+        if row < 0:
+            return
+        self.toggle_edit(row)
+
+    def _find_row_for_button(self, button, column):
+        for row in range(self.product_table.rowCount()):
+            if self.product_table.cellWidget(row, column) is button:
+                return row
+        return -1
 
     def format_number(self, value):
         v = self.parse_number(value)
@@ -290,7 +307,7 @@ class ProductManager(QWidget):
 
         num_act = self._normalize_num_act(num_act_widget.text())
         num_act_widget.setText(num_act or "")
-        return False
+        return True
 
     def set_loaded_record_locked(self, locked):
         self.loaded_record_locked = bool(locked)
@@ -564,8 +581,34 @@ class ProductManager(QWidget):
         for row in range(self.product_table.rowCount()):
             self._update_row_action_state(row)
 
+    def _cancel_edit_if_active(self, row):
+        """If a row is in edit mode (widgets not-readonly), cancel it cleanly."""
+        if self.invoice_type == "standard":
+            widget_col, btn_mod_col = 2, 8
+            editable_cols, amount_cols = [1, 2, 3, 4, 5], [3, 4, 5]
+        else:
+            widget_col, btn_mod_col = 1, 6
+            editable_cols, amount_cols = [1, 2, 3], [1, 2, 3]
+        widget = self.product_table.cellWidget(row, widget_col)
+        if widget is None or widget.isReadOnly():
+            return  # Not in edit mode
+        btn_mod = self.product_table.cellWidget(row, btn_mod_col)
+        if btn_mod:
+            btn_mod.setText("Modifier")
+        for col in amount_cols:
+            w = self.product_table.cellWidget(row, col)
+            if w:
+                w.setText(self.format_number(w.text()))
+        for col in editable_cols:
+            w = self.product_table.cellWidget(row, col)
+            if w:
+                w.setReadOnly(True)
+
     def clear_selection(self):
         self.set_loaded_record_locked(False)
+        # Annuler tout édit en cours avant de changer d'état
+        for row in range(self.product_table.rowCount()):
+            self._cancel_edit_if_active(row)
         # Réinitialiser l'état mémoire même si certaines lignes ne sont pas visibles
         self.selected_products.clear()
         self.selection_order.clear()

@@ -2,5 +2,5 @@
 DB_CONFIG = {
     'host': 'localhost',
     'user': 'sam',
-    'password': 'tahina',
+    'password': '',
 }

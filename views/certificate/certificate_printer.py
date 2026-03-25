@@ -272,6 +272,176 @@ class CertificatePrinter:
         if dlg.exec() != QPrintDialog.Accepted:
             return
 
-        doc = QTextDocument()
-        doc.setHtml(html)
-        doc.print_(printer)
+        # Remplacer l'impression native par la génération du PDF avec ReportLab (mise en page avancée)
+        file_path = printer.outputFileName()
+        print(f"[DEBUG] Chemin PDF choisi : {file_path}")
+        if not file_path:
+            print("[ERREUR] Chemin de fichier PDF vide.")
+            return
+        if not file_path.lower().endswith('.pdf'):
+            file_path += '.pdf'
+            print(f"[INFO] Ajout automatique de l'extension .pdf : {file_path}")
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib.units import mm
+            from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+            from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, Image
+            from reportlab.lib import colors
+            fd = self._extract_form_data(form)
+            entry = assignments[0]
+            pid, product_name, cert_type = entry[0], entry[1], entry[2]
+            extras = entry[3] if len(entry) > 3 else {}
+            doc = SimpleDocTemplate(
+                file_path,
+                pagesize=A4,
+                rightMargin=16*mm,
+                leftMargin=16*mm,
+                topMargin=15*mm,
+                bottomMargin=15*mm
+            )
+            story = []
+            styles = getSampleStyleSheet()
+            # Logos (plus grands)
+            logos = self._resolve_logo_sources()
+            logo_row = []
+
+            logo_height = 70   # hauteur max
+            logo_max_width = 90  # largeur max
+
+            def get_logo(path_key):
+                path = logos.get(path_key, "")
+                if path and path.startswith("file://"):
+                    path = path[7:]
+
+                if path and Path(path).exists():
+                    img = Image(path)
+                    ratio = img.imageWidth / img.imageHeight
+
+                    img.drawHeight = logo_height
+                    img.drawWidth = logo_height * ratio
+
+                    if img.drawWidth > logo_max_width:
+                        img.drawWidth = logo_max_width
+                        img.drawHeight = logo_max_width / ratio
+
+                    return img
+                return Spacer(1, logo_height)
+
+            # Logos
+            left_logo = get_logo("left")
+            center_logo = get_logo("center")
+            right_logo = get_logo("right")
+
+            # 🔥 Bloc texte centré SOUS le logo du milieu
+            center_content = [
+                center_logo,
+                Spacer(1, 5),
+                Paragraph('<para align="center"><b>MINISTÈRE DE LA SANTÉ PUBLIQUE</b></para>', styles['Normal']),
+                Paragraph('<para align="center">--------------</para>', styles['Normal']),
+                Paragraph('<para align="center"><b>SECRÉTARIAT GÉNÉRAL</b></para>', styles['Normal']),
+                Paragraph('<para align="center">--------------</para>', styles['Normal']),
+                Spacer(1, 2),
+                Paragraph('<para align="center"><b>AGENCE DE CONTRÔLE DE LA SÉCURITÉ SANITAIRE<br/>ET DE LA QUALITÉ DES DENRÉES ALIMENTAIRES</b></para>', styles['Normal']),
+                Spacer(1, 2),
+            ]
+
+           
+            # Tableau principal (3 colonnes)
+            table = Table(
+                [
+                  [left_logo, center_content, right_logo],
+                  [],
+                  [],
+                  []
+                ],
+                colWidths=[doc.width/2.8]*3
+            )
+
+            table.setStyle(TableStyle([
+
+                ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                ('ALIGN', (0,0), (0,0), 'LEFT'),
+                ('ALIGN', (1,0), (1,0), 'CENTER'),
+                ('ALIGN', (2,0), (2,0), 'RIGHT'),
+
+                ('LEFTPADDING', (0,0), (-1,-1), 0),
+                ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ('TOPPADDING', (0,0), (-1,-1), 0),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+            ]))
+
+            story.append(table)
+            story.append(Spacer(1, 10))
+            year_two_digits = date.today().strftime("%y")
+            header_number = f"N°/{year_two_digits}MSANP/SG/ACSSQDA/{cert_type}"
+
+            title_table = Table(
+                [
+                  [
+                    Paragraph('<para align="center"><font size=16><b><u>%s</u></b></font></para>' % _TITLES[cert_type], styles['Normal']),
+                  ],
+                  [
+                    Paragraph(f'<para align="center"><b>{header_number}</b></para>', styles['Normal']),
+                  ],
+                  [],
+                  [],
+                  []
+                ],
+                colWidths=[doc.width]
+            )
+            title_table.setStyle(TableStyle([
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ]))
+
+            story.append(title_table)
+            story.append(Paragraph("Je, soussigné, le Directeur de l'Agence de Contrôle de la Sécurité Sanitaire et de la Qualité des Denrées Alimentaires (ACSSQDA), certifie que", ParagraphStyle('main', fontSize=11, leading=14, spaceAfter=8)))
+            
+            # Tableau infos produit (sans bordure)
+            data = [
+                ["Echantillon", product_name, '', ''],
+                ["Classe", extras.get("classe", ""), '', ''],
+                ["Quantité", extras.get("quantite", ""), "Quantité Analysée", extras.get("quantite_analysee", "")],
+                ["Date de production", extras.get("date_production", ""), '', ''],
+                ["Date de péremption", extras.get("date_peremption", ""), '', ''],
+                ["Lot", extras.get("num_lot", ""), '', ''],
+                ["Procès-verbal de prélèvement", extras.get("proces_verbal", ""), '', ''],
+                ["Société / Etablissement", fd['company_name'], '', ''],
+                ["Analyse", extras.get("analyse", ""), '', ''],
+                ["Référence", extras.get("reference", f"N°/{year_two_digits}/{extras.get('num_acte','')}") , '', ''],
+            ]
+            table = Table(data, colWidths=[110, 120, 110, 120])
+            table.setStyle(TableStyle([
+                ('SPAN', (0,2), (1,2)),
+                ('SPAN', (2,2), (3,2)),
+                ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+                ('FONTSIZE', (0,0), (-1,-1), 10),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+                # Pas de bordure !
+                ('LINEBELOW', (0,0), (-1,-1), 0, colors.white),
+                ('LINEABOVE', (0,0), (-1,-1), 0, colors.white),
+                ('LINEBEFORE', (0,0), (-1,-1), 0, colors.white),
+                ('LINEAFTER', (0,0), (-1,-1), 0, colors.white),
+                ('LEFTPADDING', (0,0), (-1,-1), 2),
+                ('RIGHTPADDING', (0,0), (-1,-1), 2),
+                ('TOPPADDING', (0,0), (-1,-1), 2),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+            ]))
+            story.append(table)
+            story.append(Spacer(1, 10))
+            # Résultat
+            result_text = "consommable" if cert_type == "CC" else "non consommable"
+            story.append(Paragraph(f"<b>Est déclaré {result_text} à la consommation humaine</b>", ParagraphStyle('res', fontSize=11, leading=14, spaceAfter=8)))
+            story.append(Paragraph("En foi de quoi, ce certificat est délivré pour servir et valoir ce que de droit.", ParagraphStyle('main2', fontSize=10, leading=13, spaceAfter=8)))
+            # Signature
+            story.append(Paragraph(f"<para align='right'>Fait à Antananarivo, le {fd['date']}</para>", styles['Normal']))
+            story.append(Spacer(1, 8))
+            story.append(Paragraph("<para align='right'><b>Le Directeur,</b></para>", styles['Normal']))
+            story.append(Spacer(1, 36))
+            # Note de bas de page
+            story.append(Paragraph("<i>*Ce certificat est valable uniquement pour le LOT ayant fait l'objet d'analyse mentionnée ci-dessus</i>", ParagraphStyle('footer', fontSize=9, leading=11)))
+            doc.build(story)
+            print(f"[DEBUG] PDF généré : {file_path}")
+        except Exception as e:
+            print(f"[ERREUR] Exception lors de la génération du PDF : {e}")

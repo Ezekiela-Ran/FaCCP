@@ -58,7 +58,7 @@ class DatabaseManager(Tables):
                 raise
 
         try:
-            self.cursor.execute("ALTER TABLE products MODIFY COLUMN num_act VARCHAR(255) NULL")
+            self.cursor.execute("ALTER TABLE products MODIFY COLUMN num_act VARCHAR(191) NULL")
         except mysql.connector.Error as e:
             # Ignore harmless schema mismatch errors if already compatible.
             if e.errno not in (1060, 1061):
@@ -78,6 +78,11 @@ class DatabaseManager(Tables):
 
         try:
             self.cursor.execute("UPDATE products SET num_act = NULL WHERE num_act IS NOT NULL AND TRIM(num_act) IN ('', '0')")
+            try:
+                self.cursor.execute("DROP INDEX uk_products_num_act ON products")
+            except mysql.connector.Error as drop_err:
+                if drop_err.errno != 1091:
+                    raise
             self.cursor.execute("CREATE UNIQUE INDEX uk_products_num_act ON products(num_act)")
         except mysql.connector.Error as e:
             if e.errno not in (1061, 1062):

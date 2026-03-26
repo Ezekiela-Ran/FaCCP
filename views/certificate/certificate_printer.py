@@ -11,6 +11,7 @@ from html import escape
 from PySide6.QtGui import QTextDocument, QPageSize, QPageLayout
 from PySide6.QtCore import QMarginsF
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
+from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 
 _TITLES = {
@@ -255,32 +256,13 @@ class CertificatePrinter:
             f"<body>{''.join(pages)}</body></html>"
         )
 
-    # ------------------------------------------------------------------
-    # Impression
-    # ------------------------------------------------------------------
+    def _build_document(self, html: str) -> QTextDocument:
+        document = QTextDocument(self.parent)
+        document.setDocumentMargin(0)
+        document.setHtml(html)
+        return document
 
-    def print_certificates(self, form, assignments: list[tuple]):
-        """Affiche le dialogue d'impression et imprime tous les certificats."""
-        html = self.generate_html(form, assignments)
-
-        printer = QPrinter(QPrinter.HighResolution)
-        printer.setPageSize(QPageSize(QPageSize.A4))
-        printer.setPageOrientation(QPageLayout.Portrait)
-        printer.setPageMargins(QMarginsF(6, 6, 6, 6), QPageLayout.Millimeter)
-
-        dlg = QPrintDialog(printer, self.parent)
-        if dlg.exec() != QPrintDialog.Accepted:
-            return
-
-        # Remplacer l'impression native par la génération du PDF avec ReportLab (mise en page avancée)
-        file_path = printer.outputFileName()
-        print(f"[DEBUG] Chemin PDF choisi : {file_path}")
-        if not file_path:
-            print("[ERREUR] Chemin de fichier PDF vide.")
-            return
-        if not file_path.lower().endswith('.pdf'):
-            file_path += '.pdf'
-            print(f"[INFO] Ajout automatique de l'extension .pdf : {file_path}")
+    def _generate_pdf_with_reportlab(self, form, assignments: list[tuple], output_path: str):
         try:
             from reportlab.lib.pagesizes import A4
             from reportlab.lib.units import mm
@@ -291,6 +273,7 @@ class CertificatePrinter:
             entry = assignments[0]
             pid, product_name, cert_type = entry[0], entry[1], entry[2]
             extras = entry[3] if len(entry) > 3 else {}
+            file_path = output_path
             doc = SimpleDocTemplate(
                 file_path,
                 pagesize=A4,
@@ -442,6 +425,53 @@ class CertificatePrinter:
             # Note de bas de page
             story.append(Paragraph("<i>*Ce certificat est valable uniquement pour le LOT ayant fait l'objet d'analyse mentionnée ci-dessus</i>", ParagraphStyle('footer', fontSize=9, leading=11)))
             doc.build(story)
-            print(f"[DEBUG] PDF généré : {file_path}")
+        except Exception:
+            raise
+
+    # ------------------------------------------------------------------
+    # Impression
+    # ------------------------------------------------------------------
+
+    def print_certificates(self, form, assignments: list[tuple]):
+        """Ouvre les options d'impression et imprime le certificat sur le périphérique choisi."""
+        html = self.generate_html(form, assignments)
+        document = self._build_document(html)
+        printer = QPrinter(QPrinter.HighResolution)
+        printer.setPageSize(QPageSize(QPageSize.A4))
+        printer.setPageOrientation(QPageLayout.Portrait)
+        printer.setPageMargins(QMarginsF(6, 6, 6, 6), QPageLayout.Millimeter)
+
+        dialog = QPrintDialog(printer, self.parent)
+        dialog.setWindowTitle("Imprimer le certificat")
+        if dialog.exec() != QPrintDialog.Accepted:
+            return
+
+        try:
+            if printer.outputFormat() == QPrinter.OutputFormat.PdfFormat and not printer.outputFileName():
+                default_name = f"certificat_{date.today().strftime('%Y%m%d')}.pdf"
+                file_path, _ = QFileDialog.getSaveFileName(
+                    self.parent,
+                    "Enregistrer le certificat en PDF",
+                    default_name,
+                    "PDF Files (*.pdf)",
+                )
+                if not file_path:
+                    return
+                if not file_path.lower().endswith('.pdf'):
+                    file_path += '.pdf'
+                printer.setOutputFileName(file_path)
+
+            if printer.outputFormat() == QPrinter.OutputFormat.PdfFormat and printer.outputFileName():
+                self._generate_pdf_with_reportlab(form, assignments, printer.outputFileName())
+                QMessageBox.information(
+                    self.parent,
+                    "PDF enregistré",
+                    f"Certificat enregistré dans :\n{printer.outputFileName()}",
+                )
+                return
+
+            page_rect = printer.pageRect(QPrinter.Unit.Point)
+            document.setPageSize(page_rect.size())
+            document.print_(printer)
         except Exception as e:
-            print(f"[ERREUR] Exception lors de la génération du PDF : {e}")
+            QMessageBox.critical(self.parent, "Erreur", f"Erreur lors de l'impression du certificat : {e}")

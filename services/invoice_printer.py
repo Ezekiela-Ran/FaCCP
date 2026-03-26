@@ -3,6 +3,7 @@ from html import escape
 import tempfile
 import subprocess
 import os
+import platform
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -310,8 +311,8 @@ class InvoicePrinter:
             if not self.generate_pdf_from_html(html, tmp_path):
                 return
 
-            # Ouvrir le PDF avec le visionneur par défaut
-            subprocess.Popen(['xdg-open', tmp_path])
+            # Ouvrir le PDF avec le visionneur par défaut (cross-platform)
+            self._open_file_with_default_app(tmp_path)
             
         except Exception as e:
             QMessageBox.critical(self.parent, 'Erreur', f'Erreur lors de l\'aperçu: {str(e)}')
@@ -330,9 +331,29 @@ class InvoicePrinter:
             if not self.generate_pdf_from_html(html, tmp_path):
                 return
 
-            # Lancer la boîte de dialogue d'impression avec le fichier PDF
-            subprocess.Popen(['lp', tmp_path])
+            # Lancer l'impression avec la commande système adaptée (cross-platform)
+            self._print_file(tmp_path)
             QMessageBox.information(self.parent, 'Impression', 'Document envoyé à l\'imprimante.')
             
         except Exception as e:
             QMessageBox.critical(self.parent, 'Erreur', f'Erreur lors de l\'impression: {str(e)}')
+
+    def _open_file_with_default_app(self, path):
+        system_name = platform.system()
+        if system_name == 'Windows':
+            os.startfile(path)
+            return
+        if system_name == 'Darwin':
+            subprocess.Popen(['open', path])
+            return
+        subprocess.Popen(['xdg-open', path])
+
+    def _print_file(self, path):
+        system_name = platform.system()
+        if system_name == 'Windows':
+            os.startfile(path, 'print')
+            return
+        if system_name == 'Darwin':
+            subprocess.Popen(['lp', path])
+            return
+        subprocess.Popen(['lp', path])

@@ -56,7 +56,7 @@ class Tables:
             id INT AUTO_INCREMENT PRIMARY KEY,
             product_name VARCHAR(255) NOT NULL,
             ref_b_analyse INT NOT NULL,
-            num_act VARCHAR(255),
+            num_act VARCHAR(191),
             physico INT,
             micro INT,
             toxico INT,
@@ -91,7 +91,7 @@ class Tables:
     def app_settings_table(self):
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS app_settings (
-            setting_key VARCHAR(255) PRIMARY KEY,
+            setting_key VARCHAR(191) PRIMARY KEY,
             setting_value VARCHAR(255) NOT NULL
         )
         """)

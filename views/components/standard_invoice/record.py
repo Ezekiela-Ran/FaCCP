@@ -4,9 +4,9 @@ from views.foundation.templates.records import ListRecordTemplate
 from models.standard_invoice import StandardInvoice
 
 class StandardInvoiceRecord(QtWidgets.QWidget):
-    standardinvoice = StandardInvoice()
     def __init__(self):
         super().__init__()
+        self.standardinvoice = StandardInvoice()
         self.setObjectName("card")
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
         self.list_record = ListRecordTemplate(self.standardinvoice.headers, self.standardinvoice.data)
@@ -43,9 +43,24 @@ class StandardInvoiceRecord(QtWidgets.QWidget):
             if hasattr(self.parent().parent(), 'body_layout'):
                 self.parent().parent().body_layout.current_invoice_id = invoice_id
 
-            # Sélectionner les produits
-            selected_products = self.standardinvoice.get_invoice_items(invoice_id, 'standard')
-            self.parent().parent().body_layout.product_manager.select_products(selected_products)
+            # Important: reset any previous invoice selection before applying this one
+            self.parent().parent().body_layout.product_manager.clear_selection()
+
+            # Sélectionner les produits avec leurs Ref.b.analyse sauvegardés
+            selected_items = self.standardinvoice.get_invoice_items_with_refs(invoice_id, 'standard')
+            selected_products = [row['product_id'] for row in selected_items]
+            ref_mapping = {
+                row['product_id']: row.get('ref_b_analyse')
+                for row in selected_items
+                if row.get('ref_b_analyse') is not None
+            }
+            num_act_mapping = {
+                row['product_id']: row.get('num_act')
+                for row in selected_items
+                if row.get('num_act') is not None and str(row.get('num_act')).strip() != ''
+            }
+            self.parent().parent().body_layout.product_manager.select_products(selected_products, ref_mapping=ref_mapping, num_act_mapping=num_act_mapping)
+            self.parent().parent().body_layout.product_manager.set_loaded_record_locked(True)
             
             # Mettre à jour le total
             self.parent().parent().body_layout.update_total_display()

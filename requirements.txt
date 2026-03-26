@@ -1,7 +1,10 @@
 autopep8==2.3.2
+mysql-connector-python>=9.0.0
 num2words==0.5.14
 pycodestyle==2.14.0
 PySide6==6.10.2
 PySide6_Addons==6.10.2
 PySide6_Essentials==6.10.2
 shiboken6==6.10.2
+reportlab>=4.0.0
+weasyprint>=60.0

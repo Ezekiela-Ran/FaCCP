@@ -23,10 +23,27 @@ class PreviewInvoiceAction:
             QMessageBox.warning(body_layout, "Aperçu impossible", "Aucun produit sélectionné.")
             return
 
+        # Keep preview order stable according to selection order
+        pm = body_layout.product_manager
+        try:
+            order = pm.selection_order
+        except Exception:
+            order = list(selected_products)
+        # build ordered selected list (keep only currently selected pids)
+        selected_set = {pid for pid, sel in pm.selected_products.items() if sel}
+        ordered_selected = [pid for pid in order if pid in selected_set]
+        # fallback if empty
+        if not ordered_selected:
+            ordered_selected = [pid for pid in selected_products]
+        ref_mapping = pm.get_selected_ref_mapping()
+        num_act_mapping = pm.get_selected_num_act_mapping()
+
         html = body_layout.invoice_printer.generate_invoice_html(
             form,
             GlobalVariable.invoice_type,
-            selected_products,
+            ordered_selected,
             body_layout.db_manager,
+            ref_mapping=ref_mapping,
+            num_act_mapping=num_act_mapping,
         )
         body_layout.invoice_printer.preview_invoice(html)

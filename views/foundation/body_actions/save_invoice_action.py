@@ -1,9 +1,45 @@
 from PySide6.QtWidgets import QMessageBox
-
 from views.foundation.globals import GlobalVariable
 
 
 class SaveInvoiceAction:
+    @staticmethod
+    def _allocate_refs_for_save(body_layout, selected_products):
+        pm = body_layout.product_manager
+        allocated_refs = dict(pm.get_selected_ref_mapping())
+        ordered_selected = [
+            pid for pid in pm.selection_order
+            if pid in selected_products and pm.selected_products.get(pid, False)
+        ]
+
+        for pid in ordered_selected:
+            if pid in allocated_refs:
+                continue
+            allocated_refs[pid] = int(body_layout.product_service.allocate_next_ref_b_analyse())
+
+        return allocated_refs
+
+    @staticmethod
+    def _refresh_record_list(main_layout, body_layout):
+        head_layout = getattr(main_layout, "head_layout", None)
+        record_widget = getattr(head_layout, "record", None)
+        if not record_widget:
+            return
+
+        if hasattr(record_widget, "load_records"):
+            record_widget.load_records()
+            return
+
+        list_record = getattr(record_widget, "list_record", None)
+        if not list_record or not hasattr(list_record, "update_data"):
+            return
+
+        if GlobalVariable.invoice_type == "standard":
+            data = body_layout.invoice_service.get_standard_invoices()
+        else:
+            data = body_layout.invoice_service.get_proforma_invoices()
+        list_record.update_data(data)
+
     @staticmethod
     def execute(body_layout):
         main_layout = body_layout.parent()
@@ -28,14 +64,38 @@ class SaveInvoiceAction:
         if not selected_products:
             errors.append("Au moins un produit doit être sélectionné")
 
+        pm = body_layout.product_manager
+        selected_refs = pm.get_selected_ref_mapping() if GlobalVariable.invoice_type == "standard" else {}
+        selected_num_acts = pm.get_selected_num_act_mapping() if GlobalVariable.invoice_type == "standard" else {}
         if GlobalVariable.invoice_type == "standard":
+            if not body_layout.current_invoice_id:
+                selected_refs = SaveInvoiceAction._allocate_refs_for_save(body_layout, selected_products)
+                pm.selected_refs.update(selected_refs)
+
             for pid in selected_products:
-                product = body_layout.product_service.get_product_by_id(pid)
-                if not product or not product.get("ref_b_analyse") or str(product["ref_b_analyse"]).strip() == "":
+                if pid not in selected_refs:
+                    product = body_layout.product_service.get_product_by_id(pid)
                     product_name = product["product_name"] if product else "inconnu"
                     errors.append(
-                        f"Le champ 'Ref.b.analyse' est obligatoire pour le produit {product_name}"
+                        f"Ref.b.analyse manquant pour le produit {product_name}. Désélectionnez puis resélectionnez le produit."
                     )
+
+            seen_num_act = {}
+            for pid in selected_products:
+                num_act = selected_num_acts.get(pid)
+                if num_act is None:
+                    continue
+                if num_act in seen_num_act:
+                    first_pid = seen_num_act[num_act]
+                    first_product = body_layout.product_service.get_product_by_id(first_pid)
+                    second_product = body_layout.product_service.get_product_by_id(pid)
+                    first_name = first_product["product_name"] if first_product else str(first_pid)
+                    second_name = second_product["product_name"] if second_product else str(pid)
+                    errors.append(
+                        f"N°Acte dupliqué dans la facture: '{num_act}' est utilisé pour {first_name} et {second_name}."
+                    )
+                else:
+                    seen_num_act[num_act] = pid
 
         if errors:
             msg = QMessageBox()
@@ -66,6 +126,8 @@ class SaveInvoiceAction:
                     responsable,
                     total,
                     selected_products,
+                    selected_refs,
+                    selected_num_acts,
                 )
             else:
                 invoice_id = body_layout.invoice_service.save_standard_invoice(
@@ -79,6 +141,8 @@ class SaveInvoiceAction:
                     responsable,
                     total,
                     selected_products,
+                    selected_refs,
+                    selected_num_acts,
                 )
 
             if hasattr(form, "standard_invoice_number"):
@@ -116,7 +180,13 @@ class SaveInvoiceAction:
         msg.setText(f"Enregistrement effectué avec succès.\nNuméro de facture: {invoice_id}")
         msg.exec()
 
-        if hasattr(main_layout.head_layout, "record"):
-            main_layout.head_layout.record.load_records()
+        SaveInvoiceAction._refresh_record_list(main_layout, body_layout)
 
+        # Clear form and selection, then rebuild the UI for a new invoice of the same type
         body_layout.clear_form_and_selection()
+        try:
+            # Rebuild the UI to show a fresh invoice view (standard or proforma)
+            main_layout.build_ui(GlobalVariable.invoice_type)
+        except Exception:
+            # If rebuilding fails, at least ensure the current form is cleared
+            pass

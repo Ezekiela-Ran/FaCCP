@@ -6,6 +6,14 @@ from views.foundation.globals import GlobalVariable
 class PrintInvoiceAction:
     @staticmethod
     def execute(body_layout):
+        if not body_layout.current_invoice_id:
+            QMessageBox.warning(
+                body_layout,
+                "Impression impossible",
+                "Veuillez d'abord enregistrer la facture avant de l'imprimer.",
+            )
+            return
+
         main_layout = body_layout.parent()
         if not hasattr(main_layout, "head_layout") or not hasattr(main_layout.head_layout, "form"):
             QMessageBox.warning(
@@ -23,10 +31,24 @@ class PrintInvoiceAction:
             QMessageBox.warning(body_layout, "Impression impossible", "Aucun produit sélectionné.")
             return
 
+        pm = body_layout.product_manager
+        try:
+            order = pm.selection_order
+        except Exception:
+            order = list(selected_products)
+        selected_set = {pid for pid, sel in pm.selected_products.items() if sel}
+        ordered_selected = [pid for pid in order if pid in selected_set]
+        if not ordered_selected:
+            ordered_selected = [pid for pid in selected_products]
+        ref_mapping = pm.get_selected_ref_mapping()
+        num_act_mapping = pm.get_selected_num_act_mapping()
+
         html = body_layout.invoice_printer.generate_invoice_html(
             form,
             GlobalVariable.invoice_type,
-            selected_products,
+            ordered_selected,
             body_layout.db_manager,
+            ref_mapping=ref_mapping,
+            num_act_mapping=num_act_mapping,
         )
         body_layout.invoice_printer.print_invoice(html)

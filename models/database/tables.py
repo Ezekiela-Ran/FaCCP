@@ -4,9 +4,12 @@ import mysql.connector
 class Tables:
     def __init__(self):
         self.conn = mysql.connector.connect(**DB_CONFIG)
+        # Ensure each statement sees up-to-date data across multiple app connections.
+        self.conn.autocommit = True
         self.cursor = self.conn.cursor(dictionary=True)
         self.cursor.execute("CREATE DATABASE IF NOT EXISTS invoicing")
         self.cursor.execute("USE invoicing")
+        self.cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
 
     def proforma_invoice_table(self):
         self.cursor.execute("""
@@ -53,12 +56,13 @@ class Tables:
             id INT AUTO_INCREMENT PRIMARY KEY,
             product_name VARCHAR(255) NOT NULL,
             ref_b_analyse INT NOT NULL,
-            num_act VARCHAR(255),
+            num_act VARCHAR(191),
             physico INT,
             micro INT,
             toxico INT,
             subtotal INT,
             product_type_id INT NOT NULL,
+            UNIQUE KEY uk_products_num_act (num_act),
             FOREIGN KEY (product_type_id)
             REFERENCES product_type(id)
             ON DELETE CASCADE
@@ -72,6 +76,8 @@ class Tables:
             invoice_id INT NOT NULL,
             invoice_type ENUM('standard', 'proforma') NOT NULL,
             product_id INT NOT NULL,
+            ref_b_analyse INT NULL,
+            num_act VARCHAR(255) NULL,
             quantity INT DEFAULT 1,
             physico DECIMAL(10,2) DEFAULT 0,
             micro DECIMAL(10,2) DEFAULT 0,
@@ -79,6 +85,14 @@ class Tables:
             subtotal DECIMAL(10,2) DEFAULT 0,
             total DECIMAL(10,2) DEFAULT 0,
             FOREIGN KEY (product_id) REFERENCES products(id)
+        )
+        """)
+
+    def app_settings_table(self):
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS app_settings (
+            setting_key VARCHAR(191) PRIMARY KEY,
+            setting_value VARCHAR(255) NOT NULL
         )
         """)
 

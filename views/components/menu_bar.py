@@ -16,11 +16,13 @@ class MenuBar(QtWidgets.QMenuBar):
 
         proforma_action = self.new_file_menu.addAction("Facture proforma")
         proforma_action.triggered.connect(lambda: self.parent.menubar_click_proforma())
+
+        init_counters_action = self.file_menu.addAction("Initialiser facture et Ref.b.analyse")
+        init_counters_action.triggered.connect(lambda: self.parent.menubar_click_initialize_counters())
         
-        # Menu pour les thèmes
-        self.theme_menu = self.addMenu("Thème")
-        self.theme_menu.addAction("Clair")
-        self.theme_menu.addAction("Sombre")
+        # Action de réinitialisation : archive les données de l'année précédente et remet les compteurs à 1
+        reset_action = self.file_menu.addAction("Réinitialisation")
+        reset_action.triggered.connect(lambda: self.parent.menubar_click_reset())
         self._apply_styles()
     
     def _apply_styles(self): 

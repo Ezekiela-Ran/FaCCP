@@ -3,9 +3,9 @@ from models.proforma_invoice import ProformaInvoice
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QDate
 class ProformaInvoiceRecord(QtWidgets.QWidget):
-    proformainvoice=ProformaInvoice()
     def __init__(self):
         super().__init__()
+        self.proformainvoice = ProformaInvoice()
         self.setObjectName("card")
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
         self.list_record = ListRecordTemplate(self.proformainvoice.headers,self.proformainvoice.data)
@@ -33,9 +33,13 @@ class ProformaInvoiceRecord(QtWidgets.QWidget):
             if hasattr(self.parent().parent(), 'body_layout'):
                 self.parent().parent().body_layout.current_invoice_id = invoice_id
 
+            # Important: reset any previous invoice selection before applying this one
+            self.parent().parent().body_layout.product_manager.clear_selection()
+
             # Sélectionner les produits
             selected_products = self.proformainvoice.get_invoice_items(invoice_id, 'proforma')
             self.parent().parent().body_layout.product_manager.select_products(selected_products)
+            self.parent().parent().body_layout.product_manager.set_loaded_record_locked(True)
             
             # Mettre à jour le total
             self.parent().parent().body_layout.update_total_display()

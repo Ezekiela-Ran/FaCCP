@@ -67,8 +67,14 @@ class DatabaseManager(Tables):
                 self.cursor.execute("DROP INDEX uk_products_num_act ON products")
             else:
                 self.cursor.execute("DROP INDEX uk_products_num_act")
-        self.cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uk_products_num_act ON products(num_act)")
-        self.cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uk_users_username ON users(username)")
+
+        if self.is_mysql:
+            self.cursor.execute("CREATE UNIQUE INDEX uk_products_num_act ON products(num_act)")
+            if not self.index_exists("uk_users_username"):
+                self.cursor.execute("CREATE UNIQUE INDEX uk_users_username ON users(username)")
+        else:
+            self.cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uk_products_num_act ON products(num_act)")
+            self.cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uk_users_username ON users(username)")
 
     def fetch_all(self):
         cursor = self.conn.cursor(dictionary=True)

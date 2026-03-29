@@ -26,6 +26,7 @@ def build_default_database_config() -> dict:
         'engine': DEFAULT_DB_ENGINE,
         'sqlite_path': _default_sqlite_path(),
         'deployment_role': 'client',
+        'setup_completed': False,
         'server_host_hint': '',
         'mysql': {
             'host': DEFAULT_DB_HOST,
@@ -71,11 +72,22 @@ def normalize_database_config(raw_config: dict | None) -> dict:
     defaults = build_default_database_config()
     raw_config = raw_config if isinstance(raw_config, dict) else {}
     mysql_config = raw_config.get('mysql') if isinstance(raw_config.get('mysql'), dict) else {}
+    inferred_setup_completed = bool(
+        raw_config.get('setup_completed')
+        or str(raw_config.get('server_host_hint') or '').strip()
+        or (
+            isinstance(mysql_config, dict)
+            and str(mysql_config.get('host') or '').strip()
+            and str(mysql_config.get('host') or '').strip() != DEFAULT_DB_HOST
+        )
+        or str(raw_config.get('deployment_role') or '').strip().lower() == 'server'
+    )
 
     return {
         'engine': _normalize_engine(raw_config.get('engine')),
         'sqlite_path': _expand_path(raw_config.get('sqlite_path') or defaults['sqlite_path']),
         'deployment_role': str(raw_config.get('deployment_role') or defaults.get('deployment_role') or 'client').strip().lower() or 'client',
+        'setup_completed': inferred_setup_completed,
         'server_host_hint': str(raw_config.get('server_host_hint') or defaults.get('server_host_hint') or '').strip(),
         'mysql': {
             'host': str(mysql_config.get('host') or defaults['mysql']['host']).strip() or DEFAULT_DB_HOST,
@@ -141,6 +153,7 @@ def get_database_settings() -> dict:
         'engine': engine,
         'sqlite_path': sqlite_path,
         'deployment_role': str(file_config.get('deployment_role') or 'client').strip().lower() or 'client',
+        'setup_completed': bool(file_config.get('setup_completed')),
         'server_host_hint': str(file_config.get('server_host_hint') or '').strip(),
         'mysql': {
             'host': str(_pick_setting('DB_HOST', mysql_file_config.get('host'), DEFAULT_DB_HOST)).strip() or DEFAULT_DB_HOST,
@@ -169,6 +182,9 @@ def database_config_requires_setup() -> bool:
         return True
 
     if settings['engine'] != 'mysql':
+        return True
+
+    if not settings.get('setup_completed'):
         return True
 
     mysql_settings = settings['mysql']
@@ -223,6 +239,7 @@ def build_server_database_config(server_ip: str, database: str = DEFAULT_DB_NAME
         {
             'engine': 'mysql',
             'deployment_role': 'server',
+            'setup_completed': True,
             'server_host_hint': server_ip,
             'mysql': {
                 'host': '127.0.0.1',
@@ -240,6 +257,7 @@ def build_client_database_config(server_ip: str, database: str = DEFAULT_DB_NAME
         {
             'engine': 'mysql',
             'deployment_role': 'client',
+            'setup_completed': True,
             'server_host_hint': server_ip,
             'mysql': {
                 'host': str(server_ip or '').strip(),

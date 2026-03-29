@@ -68,11 +68,11 @@ class DatabaseConfigDialog(QtWidgets.QDialog):
         self.detected_ips = detect_local_ipv4_addresses()
         self.setModal(True)
         self.setWindowTitle("Configuration MySQL")
-        self.resize(640, 500)
         self.setStyleSheet(_DIALOG_STYLE)
         self._build_ui()
         self._load_values()
         self._toggle_role_fields()
+        self._apply_initial_size()
 
     def _build_ui(self):
         layout = QtWidgets.QVBoxLayout(self)
@@ -164,6 +164,19 @@ class DatabaseConfigDialog(QtWidgets.QDialog):
         role = self.role_input.currentData()
         self.server_group.setVisible(role == 'server')
         self.client_group.setVisible(role == 'client')
+
+    def _apply_initial_size(self):
+        size_hint = self.sizeHint().expandedTo(self.minimumSizeHint())
+        target_width = max(640, size_hint.width())
+        target_height = max(500, size_hint.height())
+
+        screen = self.screen() or QtWidgets.QApplication.primaryScreen()
+        if screen is not None:
+            available = screen.availableGeometry()
+            target_width = min(target_width, max(560, int(available.width() * 0.9)))
+            target_height = min(target_height, max(420, int(available.height() * 0.9)))
+
+        self.resize(target_width, target_height)
 
     def _collect_config(self) -> dict:
         role = self.role_input.currentData()

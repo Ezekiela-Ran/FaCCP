@@ -4,6 +4,10 @@ STEP TO LAUNCH THE PROGRAM:
 
     Run the program with python main.py
 
+BUILD WINDOWS EXECUTABLE:
+
+    python -m PyInstaller --noconfirm fac.spec
+
 
 AUTHENTICATION AND SESSIONS:
 
@@ -52,11 +56,13 @@ This screen allows:
 
 Default config file path:
 
-        %LOCALAPPDATA%\LFCA\database.json
+        %LOCALAPPDATA%\FaC\database.json
 
 Default local database path:
 
-    %LOCALAPPDATA%\LFCA\lfca.db
+    %LOCALAPPDATA%\FaC\fac.db
+
+Legacy LFCA paths are detected automatically on first launch and migrated to the FaC location.
 
 Example config file:
 
@@ -105,8 +111,8 @@ Recommended setup:
 
 1. Choose one PC/server in the LAN to host MySQL.
 2. Install MySQL Server on that machine and make sure the MySQL service is running.
-3. Launch LFCA on that machine and choose that this PC is the server.
-4. Enter a local MySQL administrator account so LFCA can create the shared database and shared application user automatically.
+3. Launch FaC on that machine and choose that this PC is the server.
+4. Enter a local MySQL administrator account so FaC can create the shared database and shared application user automatically.
 3. On each client PC, either:
 
      - open the application as an administrator and go to:
@@ -117,7 +123,7 @@ Recommended setup:
 
      - or manually edit:
 
-             %LOCALAPPDATA%\LFCA\database.json
+             %LOCALAPPDATA%\FaC\database.json
 
      and set:
 
@@ -144,11 +150,13 @@ Example LAN config:
 Notes:
 
 - Environment variables still override the JSON file if both are present.
+- The config file can also be forced with FAC_DB_CONFIG; the legacy LFCA_DB_CONFIG variable remains accepted for compatibility.
 - SQLite local mode is no longer the intended deployment mode for multi-PC use.
 - Do not share a SQLite file between PCs on a network folder.
 - MySQL is required if you want the same administrators and users on every PC.
 - The application now uses explicit transactions for critical multi-step writes to reduce partial saves and counter collisions in multi-user MySQL mode.
 - The Ref.b.analyse allocation is serialized for MySQL to avoid duplicate values when several clients work at the same time.
+- If the configured MySQL server is unreachable at startup, FaC now fails fast with an explicit startup error instead of appearing frozen for a long TCP timeout.
 
 If your MySQL account does not exist or has no privileges, create/grant it in MySQL:
 

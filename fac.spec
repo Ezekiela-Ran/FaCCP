@@ -5,7 +5,12 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('styles', 'styles'), ('images', 'images')],
+    datas=[
+        ('styles', 'styles'),
+        ('images/image.png', 'images'),
+        ('images/unnamed.png', 'images'),
+        ('images/unnamed-1.png', 'images'),
+    ],
     hiddenimports=[
         'views.certificate.certificate_dialog',
         'views.certificate.certificate_printer',
@@ -25,7 +30,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='lfca',
+    name='fac',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -45,5 +50,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='lfca',
+    name='fac',
 )

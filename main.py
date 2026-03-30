@@ -7,7 +7,7 @@ from pathlib import Path
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtWidgets import QMessageBox
 
-from models.database.db_config import database_config_requires_setup
+from models.database.db_config import database_config_requires_setup, get_database_settings
 from models.database_manager import DatabaseManager
 from services.auth_service import AuthService
 from views.auth import DatabaseConfigDialog
@@ -135,7 +135,7 @@ class ApplicationController:
                 return 0
 
             self.splash.show_message("Initialisation de la base de données...")
-            DatabaseManager.create_tables()
+            self._initialize_database()
 
             self.splash.show_message("Authentification...")
             if not self._authenticate_and_show_main_view():
@@ -188,9 +188,25 @@ class ApplicationController:
         dialog = DatabaseConfigDialog(first_run=True)
         return exec_startup_dialog(dialog) == QtWidgets.QDialog.Accepted
 
+    def _initialize_database(self):
+        try:
+            DatabaseManager.create_tables()
+        except Exception as exc:
+            settings = get_database_settings()
+            if settings['engine'] == 'mysql':
+                host = settings['mysql']['host']
+                port = settings['mysql']['port']
+                database_name = settings['mysql']['database']
+                raise RuntimeError(
+                    "Le demarrage a echoue pendant la connexion MySQL vers "
+                    f"{host}:{port} (base {database_name}). Verifiez que le serveur est accessible, "
+                    "puis relancez l'application."
+                ) from exc
+            raise
+
 
 def log_startup_error(exc: Exception) -> Path:
-    log_path = Path(tempfile.gettempdir()) / "lfca-startup.log"
+    log_path = Path(tempfile.gettempdir()) / "fac-startup.log"
     details = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
     log_path.write_text(details, encoding="utf-8")
     return log_path
@@ -206,7 +222,7 @@ def show_startup_error(exc: Exception):
 
     QMessageBox.critical(
         None,
-        "LFCA - Startup error",
+        "FaC - Erreur de demarrage",
         "L'application n'a pas pu démarrer.\n\n"
         f"Erreur: {exc}\n\n"
         f"Détails enregistrés dans: {log_path}"

@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 from pathlib import Path
 
-from models.database.db_config import get_database_settings
+from models.database.db_config import MYSQL_CONNECT_TIMEOUT_SECONDS, get_database_settings
 from models.database.sqlite_backend import connect as connect_sqlite
 
 try:
@@ -18,20 +18,37 @@ class Tables:
         if self.backend == "mysql":
             if mysql is None:
                 raise RuntimeError("mysql-connector-python n'est pas disponible.")
-            self.conn = mysql.connector.connect(
-                host=self.settings['mysql']['host'],
-                port=self.settings['mysql']['port'],
-                user=self.settings['mysql']['user'],
-                password=self.settings['mysql']['password'],
-            )
+            try:
+                self.conn = mysql.connector.connect(
+                    host=self.settings['mysql']['host'],
+                    port=self.settings['mysql']['port'],
+                    user=self.settings['mysql']['user'],
+                    password=self.settings['mysql']['password'],
+                    connection_timeout=MYSQL_CONNECT_TIMEOUT_SECONDS,
+                )
+            except Exception as exc:
+                raise RuntimeError(
+                    "Connexion MySQL impossible vers "
+                    f"{self.settings['mysql']['host']}:{self.settings['mysql']['port']} "
+                    f"pour la base {self.database_name}. Verifiez que le serveur MySQL est demarre "
+                    "et que l'adresse configuree est correcte."
+                ) from exc
             self.conn.autocommit = False
         else:
             self.conn = connect_sqlite(Path(self.settings['sqlite_path']))
         self.cursor = self.conn.cursor(dictionary=True)
         if self.is_mysql:
-            self.cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{self.database_name}`")
-            self.cursor.execute(f"USE `{self.database_name}`")
-            self.cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
+            try:
+                self.cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{self.database_name}`")
+                self.cursor.execute(f"USE `{self.database_name}`")
+                self.cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
+            except Exception as exc:
+                self.cursor.close()
+                self.conn.close()
+                raise RuntimeError(
+                    f"Initialisation MySQL impossible pour la base {self.database_name}. "
+                    "Verifiez les droits du compte MySQL et l'etat du serveur."
+                ) from exc
 
     @property
     def is_mysql(self) -> bool:

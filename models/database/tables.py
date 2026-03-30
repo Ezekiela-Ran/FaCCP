@@ -270,6 +270,57 @@ class Tables:
         )
         """)
 
+    def certificate_entry_table(self):
+        if self.is_mysql:
+            self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS certificate_entry (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                invoice_id INT NOT NULL,
+                invoice_type ENUM('standard', 'proforma') NOT NULL,
+                product_id INT NOT NULL,
+                certificate_type ENUM('CC', 'CNC') NOT NULL,
+                quantity VARCHAR(255),
+                quantity_analysee VARCHAR(255),
+                num_lot VARCHAR(255),
+                num_act VARCHAR(255),
+                num_cert VARCHAR(255),
+                classe VARCHAR(255),
+                date_production VARCHAR(32),
+                date_peremption VARCHAR(32),
+                num_prl VARCHAR(255),
+                date_commerce VARCHAR(32),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_certificate_entry_scope (invoice_id, invoice_type, product_id, certificate_type),
+                FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+            )
+            """)
+            return
+
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS certificate_entry (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_id INTEGER NOT NULL,
+            invoice_type TEXT NOT NULL CHECK (invoice_type IN ('standard', 'proforma')),
+            product_id INTEGER NOT NULL,
+            certificate_type TEXT NOT NULL CHECK (certificate_type IN ('CC', 'CNC')),
+            quantity TEXT,
+            quantity_analysee TEXT,
+            num_lot TEXT,
+            num_act TEXT,
+            num_cert TEXT,
+            classe TEXT,
+            date_production TEXT,
+            date_peremption TEXT,
+            num_prl TEXT,
+            date_commerce TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+        )
+        """)
+        self.cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uk_certificate_entry_scope ON certificate_entry(invoice_id, invoice_type, product_id, certificate_type)"
+        )
+
     def app_settings_table(self):
         if self.is_mysql:
             self.cursor.execute("""

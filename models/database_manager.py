@@ -2,7 +2,7 @@ from models.database.tables import Tables
 
 class DatabaseManager(Tables):
     table_name = ""
-    CURRENT_SCHEMA_VERSION = 1
+    CURRENT_SCHEMA_VERSION = 2
     SCHEMA_VERSION_KEY = "schema_version"
     MYSQL_SCHEMA_LOCK_NAME = "fac_schema_bootstrap"
     MYSQL_SCHEMA_LOCK_TIMEOUT_SECONDS = 15
@@ -56,6 +56,7 @@ class DatabaseManager(Tables):
         self.product_type_table()
         self.products_table()
         self.invoice_client_table()
+        self.certificate_entry_table()
         self.app_settings_table()
         self.users_table()
         self.migrate_tables()
@@ -68,6 +69,7 @@ class DatabaseManager(Tables):
             "product_type",
             "products",
             "invoice_client",
+            "certificate_entry",
             "app_settings",
             "users",
         }
@@ -114,12 +116,24 @@ class DatabaseManager(Tables):
 
     def migrate_tables(self):
         # Migration pour ajouter les colonnes manquantes si elles n'existent pas
+        self.certificate_entry_table()
         self._ensure_column("standard_invoice", "total", "DECIMAL(10,2) DEFAULT 0")
         self._ensure_column("proforma_invoice", "total", "DECIMAL(10,2) DEFAULT 0")
         self._ensure_column("standard_invoice", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
         self._ensure_column("proforma_invoice", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
         self._ensure_column("invoice_client", "ref_b_analyse", "INT NULL")
         self._ensure_column("invoice_client", "num_act", "VARCHAR(255) NULL")
+        self._ensure_column("certificate_entry", "quantity", "VARCHAR(255) NULL")
+        self._ensure_column("certificate_entry", "quantity_analysee", "VARCHAR(255) NULL")
+        self._ensure_column("certificate_entry", "num_lot", "VARCHAR(255) NULL")
+        self._ensure_column("certificate_entry", "num_act", "VARCHAR(255) NULL")
+        self._ensure_column("certificate_entry", "num_cert", "VARCHAR(255) NULL")
+        self._ensure_column("certificate_entry", "classe", "VARCHAR(255) NULL")
+        self._ensure_column("certificate_entry", "date_production", "VARCHAR(32) NULL")
+        self._ensure_column("certificate_entry", "date_peremption", "VARCHAR(32) NULL")
+        self._ensure_column("certificate_entry", "num_prl", "VARCHAR(255) NULL")
+        self._ensure_column("certificate_entry", "date_commerce", "VARCHAR(32) NULL")
+        self._ensure_column("certificate_entry", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
         self._ensure_column("users", "role", "VARCHAR(32) NOT NULL DEFAULT 'user'")
         self._ensure_column("users", "is_active", "INT NOT NULL DEFAULT 1")
         self._ensure_column("users", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
@@ -142,10 +156,17 @@ class DatabaseManager(Tables):
         if self.is_mysql:
             if not self.index_exists("uk_products_num_act"):
                 self.cursor.execute("CREATE UNIQUE INDEX uk_products_num_act ON products(num_act)")
+            if not self.index_exists("uk_certificate_entry_scope"):
+                self.cursor.execute(
+                    "CREATE UNIQUE INDEX uk_certificate_entry_scope ON certificate_entry(invoice_id, invoice_type, product_id, certificate_type)"
+                )
             if not self.index_exists("uk_users_username"):
                 self.cursor.execute("CREATE UNIQUE INDEX uk_users_username ON users(username)")
         else:
             self.cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uk_products_num_act ON products(num_act)")
+            self.cursor.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uk_certificate_entry_scope ON certificate_entry(invoice_id, invoice_type, product_id, certificate_type)"
+            )
             self.cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uk_users_username ON users(username)")
 
     def fetch_all(self):
@@ -695,6 +716,93 @@ class DatabaseManager(Tables):
             (invoice_id, invoice_type),
         )
         return self.cursor.fetchall()
+
+    def get_certificate_entries(self, invoice_id, invoice_type, product_ids=None):
+        cursor = self.conn.cursor(dictionary=True)
+        try:
+            query = (
+                "SELECT invoice_id, invoice_type, product_id, certificate_type, quantity, quantity_analysee, "
+                "num_lot, num_act, num_cert, classe, date_production, date_peremption, num_prl, date_commerce "
+                "FROM certificate_entry WHERE invoice_id=%s AND invoice_type=%s"
+            )
+            params = [invoice_id, invoice_type]
+            if product_ids:
+                placeholders = ", ".join(["%s"] * len(product_ids))
+                query += f" AND product_id IN ({placeholders})"
+                params.extend(product_ids)
+            query += " ORDER BY product_id ASC, certificate_type ASC"
+            cursor.execute(query, tuple(params))
+            return cursor.fetchall()
+        finally:
+            cursor.close()
+
+    def save_certificate_entry(self, invoice_id, invoice_type, product_id, certificate_type, payload):
+        normalized_payload = {
+            "quantity": str(payload.get("quantity") or "").strip(),
+            "quantity_analysee": str(payload.get("quantity_analysee") or "").strip(),
+            "num_lot": str(payload.get("num_lot") or "").strip(),
+            "num_act": self._normalize_num_act(payload.get("num_act")),
+            "num_cert": str(payload.get("num_cert") or "").strip(),
+            "classe": str(payload.get("classe") or "").strip(),
+            "date_production": str(payload.get("date_production") or "").strip(),
+            "date_peremption": str(payload.get("date_peremption") or "").strip(),
+            "num_prl": str(payload.get("num_prl") or "").strip(),
+            "date_commerce": str(payload.get("date_commerce") or "").strip(),
+        }
+
+        with self.transaction():
+            self.cursor.execute(
+                "SELECT id FROM certificate_entry WHERE invoice_id=%s AND invoice_type=%s AND product_id=%s AND certificate_type=%s",
+                (invoice_id, invoice_type, product_id, certificate_type),
+            )
+            existing = self.cursor.fetchone()
+
+            if existing:
+                self.cursor.execute(
+                    "UPDATE certificate_entry SET quantity=%s, quantity_analysee=%s, num_lot=%s, num_act=%s, "
+                    "num_cert=%s, classe=%s, date_production=%s, date_peremption=%s, num_prl=%s, date_commerce=%s "
+                    "WHERE invoice_id=%s AND invoice_type=%s AND product_id=%s AND certificate_type=%s",
+                    (
+                        normalized_payload["quantity"],
+                        normalized_payload["quantity_analysee"],
+                        normalized_payload["num_lot"],
+                        normalized_payload["num_act"],
+                        normalized_payload["num_cert"],
+                        normalized_payload["classe"],
+                        normalized_payload["date_production"],
+                        normalized_payload["date_peremption"],
+                        normalized_payload["num_prl"],
+                        normalized_payload["date_commerce"],
+                        invoice_id,
+                        invoice_type,
+                        product_id,
+                        certificate_type,
+                    ),
+                )
+                return existing.get("id")
+
+            self.cursor.execute(
+                "INSERT INTO certificate_entry (invoice_id, invoice_type, product_id, certificate_type, quantity, quantity_analysee, "
+                "num_lot, num_act, num_cert, classe, date_production, date_peremption, num_prl, date_commerce) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (
+                    invoice_id,
+                    invoice_type,
+                    product_id,
+                    certificate_type,
+                    normalized_payload["quantity"],
+                    normalized_payload["quantity_analysee"],
+                    normalized_payload["num_lot"],
+                    normalized_payload["num_act"],
+                    normalized_payload["num_cert"],
+                    normalized_payload["classe"],
+                    normalized_payload["date_production"],
+                    normalized_payload["date_peremption"],
+                    normalized_payload["num_prl"],
+                    normalized_payload["date_commerce"],
+                ),
+            )
+            return self.cursor.lastrowid
     
     def get_standard_invoice_by_id(self, invoice_id):
         self.cursor.execute("SELECT * FROM standard_invoice WHERE id=%s", (invoice_id,))
@@ -706,11 +814,13 @@ class DatabaseManager(Tables):
     
     def delete_standard_invoice(self, invoice_id):
         with self.transaction():
+            self.cursor.execute("DELETE FROM certificate_entry WHERE invoice_id=%s AND invoice_type=%s", (invoice_id, 'standard'))
             self.cursor.execute("DELETE FROM invoice_client WHERE invoice_id=%s AND invoice_type=%s", (invoice_id, 'standard'))
             self.cursor.execute("DELETE FROM standard_invoice WHERE id=%s", (invoice_id,))
     
     def delete_proforma_invoice(self, invoice_id):
         with self.transaction():
+            self.cursor.execute("DELETE FROM certificate_entry WHERE invoice_id=%s AND invoice_type=%s", (invoice_id, 'proforma'))
             self.cursor.execute("DELETE FROM invoice_client WHERE invoice_id=%s AND invoice_type=%s", (invoice_id, 'proforma'))
             self.cursor.execute("DELETE FROM proforma_invoice WHERE id=%s", (invoice_id,))
 

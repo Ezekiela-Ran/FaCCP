@@ -45,6 +45,19 @@ QLineEdit, QComboBox, QSpinBox {
     padding: 6px;
 }
 
+QComboBox#roleInput {
+    background-color: #FFFFFF;
+    color: #000000;
+    border: 1px solid #999999;
+}
+
+QComboBox#roleInput QAbstractItemView {
+    background-color: #FFFFFF;
+    color: #000000;
+    selection-background-color: #D9EAF7;
+    selection-color: #000000;
+}
+
 QPushButton {
     background-color: #2F5A8F;
     color: white;
@@ -97,6 +110,7 @@ class DatabaseConfigDialog(QtWidgets.QDialog):
 
         role_form = QtWidgets.QFormLayout()
         self.role_input = QtWidgets.QComboBox()
+        self.role_input.setObjectName("roleInput")
         self.role_input.addItem("Ce PC est le serveur", "server")
         self.role_input.addItem("Ce PC est un client", "client")
         self.role_input.currentIndexChanged.connect(self._toggle_role_fields)

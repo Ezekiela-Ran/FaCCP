@@ -32,12 +32,12 @@ class FormTemplate(QWidget):
 
         # Layout principal horizontal (2 colonnes)
         main_layout = QHBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(12, 12, 12, 12)
+        main_layout.setSpacing(18)
 
         # Colonne gauche
         self.left_form = QFormLayout()
-        self.left_form.setSpacing(0)
+        self.left_form.setSpacing(6)
         self.left_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.left_form.addRow(self.company_name_label, self.company_name_input)
         self.left_form.addRow(self.stat_label, self.stat_input)
@@ -45,7 +45,7 @@ class FormTemplate(QWidget):
 
         # Colonne droite
         self.right_form = QFormLayout()
-        self.right_form.setSpacing(0)
+        self.right_form.setSpacing(6)
         self.right_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.right_form.addRow(self.responsable_label, self.responsable_input)
         self.right_form.addRow(self.nif_label, self.nif_input)

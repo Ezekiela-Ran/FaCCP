@@ -1,4 +1,5 @@
 from PySide6 import QtWidgets
+from PySide6.QtCore import Qt
 from views.forms.form_factory import FormFactory
 from views.forms.record_factory import RecordFactory
 from views.foundation.globals import GlobalVariable
@@ -8,10 +9,12 @@ class HeadLayout(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
+        self.setObjectName("headLayout")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred)
         self.head_layout = QtWidgets.QHBoxLayout(self)
-        self.head_layout.setContentsMargins(0, 0, 0, 0)
-        self.head_layout.setSpacing(8)
+        self.head_layout.setContentsMargins(10, 10, 10, 6)
+        self.head_layout.setSpacing(10)
 
     def _apply_current_user_to_form(self):
         if hasattr(self, "form") and hasattr(self.form, "set_responsable_username"):

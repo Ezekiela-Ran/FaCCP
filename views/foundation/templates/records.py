@@ -11,16 +11,22 @@ class ListRecordTemplate(QWidget):
         self.all_data = self.data.copy()  # Keep original data for filtering
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
         
         # Search box
         search_layout = QHBoxLayout()
+        search_layout.setContentsMargins(0, 0, 0, 4)
+        search_layout.setSpacing(8)
         self.search_label = QLabel("Rechercher:")
         self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Recherche rapide")
+        self.search_input.setMinimumWidth(180)
+        self.search_input.setMaximumWidth(280)
         self.search_input.textChanged.connect(self.filter_data)
         search_layout.addWidget(self.search_label)
-        search_layout.addWidget(self.search_input, 1)  # Take remaining space
+        search_layout.addWidget(self.search_input)
+        search_layout.addStretch(1)
         layout.addLayout(search_layout)
         
         # Table

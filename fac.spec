@@ -10,6 +10,7 @@ a = Analysis(
         ('images/image.png', 'images'),
         ('images/unnamed.png', 'images'),
         ('images/unnamed-1.png', 'images'),
+        ('images/checkbox-check-white.svg', 'images'),
     ],
     hiddenimports=[
         'views.certificate.certificate_dialog',

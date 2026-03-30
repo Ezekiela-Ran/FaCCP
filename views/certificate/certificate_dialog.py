@@ -282,9 +282,9 @@ class CertificateDialog(QDialog):
             num_prelev_edit,
         ):
             widget.editingFinished.connect(lambda r=row_index: self._on_row_data_changed(r))
-        date_prod_edit.dateChanged.connect(lambda _date, r=row_index: self._on_row_data_changed(r))
-        date_peremp_edit.dateChanged.connect(lambda _date, r=row_index: self._on_row_data_changed(r))
-        date_pv_edit.dateChanged.connect(lambda _date, r=row_index: self._on_row_data_changed(r))
+        date_prod_edit.dateChanged.connect(lambda _date, r=row_index, e=date_prod_edit: self._on_date_edit_changed(r, e))
+        date_peremp_edit.dateChanged.connect(lambda _date, r=row_index, e=date_peremp_edit: self._on_date_edit_changed(r, e))
+        date_pv_edit.dateChanged.connect(lambda _date, r=row_index, e=date_pv_edit: self._on_date_edit_changed(r, e))
 
         if saved_entries.get("CC"):
             actual_cc.setChecked(True)
@@ -308,11 +308,31 @@ class CertificateDialog(QDialog):
         edit.setDisplayFormat("dd/MM/yyyy")
         edit.setDate(QDate.currentDate())
         edit.setMinimumWidth(112)
+        edit.setProperty("user_modified", False)
+        edit.setProperty("loading_value", False)
         return edit
 
     @staticmethod
     def _date_edit_value(edit: QDateEdit) -> str:
-        return edit.date().toString("dd/MM/yyyy")
+        return edit.date().toString("dd/MM/yyyy") if bool(edit.property("user_modified")) else ""
+
+    @staticmethod
+    def _legacy_date_was_modified(value: str) -> bool:
+        text = str(value or "").strip()
+        if not text:
+            return False
+        return text != QDate.currentDate().toString("dd/MM/yyyy")
+
+    @classmethod
+    def _extract_date_payload(cls, entry: dict | None, value_key: str, modified_key: str) -> tuple[str, bool]:
+        value = str((entry or {}).get(value_key) or "").strip()
+        modified = (entry or {}).get(modified_key)
+        if modified is None:
+            legacy_modified = cls._legacy_date_was_modified(value)
+            return (value if legacy_modified else "", legacy_modified)
+
+        is_modified = bool(modified)
+        return (value if is_modified else "", is_modified)
 
     @staticmethod
     def _make_line_edit(placeholder: str, width: int) -> QLineEdit:
@@ -324,6 +344,21 @@ class CertificateDialog(QDialog):
     @staticmethod
     def _entry_to_payload(entry: dict | None, base_defaults: dict | None = None) -> dict:
         base_defaults = base_defaults or {}
+        date_production, date_production_modified = CertificateDialog._extract_date_payload(
+            entry,
+            "date_production",
+            "date_production_modified",
+        )
+        date_peremption, date_peremption_modified = CertificateDialog._extract_date_payload(
+            entry,
+            "date_peremption",
+            "date_peremption_modified",
+        )
+        date_commerce, date_commerce_modified = CertificateDialog._extract_date_payload(
+            entry,
+            "date_commerce",
+            "date_commerce_modified",
+        )
         return {
             "quantity": str((entry or {}).get("quantity") or "").strip(),
             "quantity_analysee": str((entry or {}).get("quantity_analysee") or "").strip(),
@@ -331,16 +366,39 @@ class CertificateDialog(QDialog):
             "num_act": str((entry or {}).get("num_act") or base_defaults.get("num_act") or "").strip(),
             "num_cert": str((entry or {}).get("num_cert") or "").strip(),
             "classe": str((entry or {}).get("classe") or "").strip(),
-            "date_production": str((entry or {}).get("date_production") or "").strip(),
-            "date_peremption": str((entry or {}).get("date_peremption") or "").strip(),
+            "date_production": date_production,
+            "date_production_modified": date_production_modified,
+            "date_peremption": date_peremption,
+            "date_peremption_modified": date_peremption_modified,
             "num_prl": str((entry or {}).get("num_prl") or "").strip(),
-            "date_commerce": str((entry or {}).get("date_commerce") or "").strip(),
+            "date_commerce": date_commerce,
+            "date_commerce_modified": date_commerce_modified,
         }
 
     @staticmethod
     def _parse_date_value(value: str) -> QDate:
         parsed = QDate.fromString(str(value or "").strip(), "dd/MM/yyyy")
         return parsed if parsed.isValid() else QDate.currentDate()
+
+    @staticmethod
+    def _set_date_edit_state(edit: QDateEdit, value: str, user_modified: bool = False):
+        text = str(value or "").strip()
+        edit.setProperty("loading_value", True)
+        try:
+            if text and user_modified:
+                edit.setDate(CertificateDialog._parse_date_value(text))
+                edit.setProperty("user_modified", True)
+            else:
+                edit.setDate(QDate.currentDate())
+                edit.setProperty("user_modified", False)
+        finally:
+            edit.setProperty("loading_value", False)
+
+    def _on_date_edit_changed(self, row_index: int, edit: QDateEdit):
+        if bool(edit.property("loading_value")):
+            return
+        edit.setProperty("user_modified", True)
+        self._on_row_data_changed(row_index)
 
     def _load_row_values(self, row: dict, payload: dict):
         row["loading"] = True
@@ -351,10 +409,22 @@ class CertificateDialog(QDialog):
             row["num_acte_edit"].setText(payload.get("num_act", ""))
             row["num_cert_edit"].setText(payload.get("num_cert", ""))
             row["classe_edit"].setText(payload.get("classe", ""))
-            row["date_prod_edit"].setDate(self._parse_date_value(payload.get("date_production", "")))
-            row["date_peremp_edit"].setDate(self._parse_date_value(payload.get("date_peremption", "")))
+            self._set_date_edit_state(
+                row["date_prod_edit"],
+                payload.get("date_production", ""),
+                payload.get("date_production_modified", False),
+            )
+            self._set_date_edit_state(
+                row["date_peremp_edit"],
+                payload.get("date_peremption", ""),
+                payload.get("date_peremption_modified", False),
+            )
             row["num_prelev_edit"].setText(payload.get("num_prl", ""))
-            row["date_pv_edit"].setDate(self._parse_date_value(payload.get("date_commerce", "")))
+            self._set_date_edit_state(
+                row["date_pv_edit"],
+                payload.get("date_commerce", ""),
+                payload.get("date_commerce_modified", False),
+            )
         finally:
             row["loading"] = False
 
@@ -367,9 +437,12 @@ class CertificateDialog(QDialog):
             "num_cert": row["num_cert_edit"].text().strip(),
             "classe": row["classe_edit"].text().strip(),
             "date_production": self._date_edit_value(row["date_prod_edit"]),
+            "date_production_modified": bool(row["date_prod_edit"].property("user_modified")),
             "date_peremption": self._date_edit_value(row["date_peremp_edit"]),
+            "date_peremption_modified": bool(row["date_peremp_edit"].property("user_modified")),
             "num_prl": row["num_prelev_edit"].text().strip(),
             "date_commerce": self._date_edit_value(row["date_pv_edit"]),
+            "date_commerce_modified": bool(row["date_pv_edit"].property("user_modified")),
         }
 
     def _persist_row_state(self, row: dict, cert_type: str | None = None):

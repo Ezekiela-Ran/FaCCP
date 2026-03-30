@@ -286,9 +286,12 @@ class Tables:
                 num_cert VARCHAR(255),
                 classe VARCHAR(255),
                 date_production VARCHAR(32),
+                date_production_modified TINYINT(1) NULL,
                 date_peremption VARCHAR(32),
+                date_peremption_modified TINYINT(1) NULL,
                 num_prl VARCHAR(255),
                 date_commerce VARCHAR(32),
+                date_commerce_modified TINYINT(1) NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE KEY uk_certificate_entry_scope (invoice_id, invoice_type, product_id, certificate_type),
                 FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
@@ -310,9 +313,12 @@ class Tables:
             num_cert TEXT,
             classe TEXT,
             date_production TEXT,
+            date_production_modified INTEGER,
             date_peremption TEXT,
+            date_peremption_modified INTEGER,
             num_prl TEXT,
             date_commerce TEXT,
+            date_commerce_modified INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
         )

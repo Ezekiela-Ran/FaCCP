@@ -127,6 +127,11 @@ class CertificatePrinter:
             parts.append(f"Facture N°{invoice_number}/{year_two_digits}/ACSSQDA")
         return " ".join(part for part in parts if part).strip()
 
+    @staticmethod
+    def _display_date(value: str) -> str:
+        text = str(value or "").strip()
+        return text or "-"
+
     # ------------------------------------------------------------------
     # Génération HTML
     # ------------------------------------------------------------------
@@ -166,11 +171,11 @@ class CertificatePrinter:
         num_acte          = escape(extras.get("num_acte", ""))
         analyse_raw       = extras.get("analyse", "")
         classe            = escape(extras.get("classe", ""))
-        date_production   = escape(extras.get("date_production", ""))
-        date_peremption   = escape(extras.get("date_peremption", ""))
+        date_production   = escape(self._display_date(extras.get("date_production", "")))
+        date_peremption   = escape(self._display_date(extras.get("date_peremption", "")))
         num_cert          = escape(extras.get("num_cert", ""))
         num_prl           = escape(extras.get("num_prl", ""))
-        date_commerce     = escape(extras.get("date_commerce", ""))
+        date_commerce     = escape(self._display_date(extras.get("date_commerce", "")))
         reference         = escape(extras.get("reference", ""))
         ref_b_analyse     = escape(str(extras.get("ref_b_analyse", "") or ""))
         invoice_number    = escape(str(extras.get("invoice_number", "") or ""))
@@ -238,11 +243,11 @@ class CertificatePrinter:
     ET DE LA QUALITÉ DES DENRÉES ALIMENTAIRES
   </p>
 
-    <div style="text-align:center;margin:3pt 0 8pt 0;">
-        <p style="font-size:16pt;font-weight:700;line-height:1.0;letter-spacing:0.2pt;margin:0;">
+    <div style="text-align:center;margin:1pt 0 6pt 0;">
+        <p style="font-size:17.5pt;font-weight:700;line-height:1.0;letter-spacing:0.05pt;margin:0;">
             {title}
         </p>
-        <p style="font-size:13pt;font-weight:700;line-height:1.0;margin:1pt 0 0 0;">
+        <p style="font-size:12.8pt;font-weight:700;line-height:1.0;margin:2pt 0 0 0;">
             {escape(header_number)}
         </p>
     </div>
@@ -262,7 +267,6 @@ class CertificatePrinter:
     <tr><td><b>Date de production</b></td><td>:</td><td><b>{date_production}</b></td></tr>
     <tr><td><b>Date de péremption</b></td><td>:</td><td><b>{date_peremption}</b></td></tr>
     <tr><td><b>Lot</b></td><td>:</td><td><b>{num_lot}</b></td></tr>
-    <tr><td><b>N° PRL</b></td><td>:</td><td><b>{num_prl}</b></td></tr>
     <tr><td><b>Date commerce</b></td><td>:</td><td><b>{date_commerce}</b></td></tr>
     <tr><td><b>Procès-verbal de prélèvement</b></td><td>:</td><td><b>{proces_verbal}</b></td></tr>
     <tr><td><b>Société / Etablissement</b></td><td>:</td><td><b>{fd['company_name']}</b></td></tr>
@@ -386,15 +390,15 @@ class CertificatePrinter:
                 'CertificateTitle',
                 parent=center_style,
                 fontName='Times-Bold',
-                fontSize=13.4,
-                leading=15,
+                fontSize=16.0,
+                leading=16,
                 spaceAfter=1,
             )
             title_sub_style = ParagraphStyle(
                 'CertificateTitleSub',
                 parent=center_style,
                 fontName='Times-Bold',
-                fontSize=11.1,
+                fontSize=12.1,
                 leading=13,
             )
             intro_style = ParagraphStyle(
@@ -525,11 +529,10 @@ class CertificatePrinter:
                     [Paragraph("Classe", label_style), Paragraph(":", label_style), Paragraph(escape(str(extras.get('classe', '') or '')), value_style)],
                     [Paragraph("Quantité", label_style), Paragraph(":", label_style), Paragraph(quantity_value, value_style)],
                     [Paragraph("N° Acte", label_style), Paragraph(":", label_style), Paragraph(escape(num_acte), value_style)],
-                    [Paragraph("Date de production", label_style), Paragraph(":", label_style), Paragraph(escape(str(extras.get('date_production', '') or '')), value_style)],
-                    [Paragraph("Date de péremption", label_style), Paragraph(":", label_style), Paragraph(escape(str(extras.get('date_peremption', '') or '')), value_style)],
+                    [Paragraph("Date de production", label_style), Paragraph(":", label_style), Paragraph(escape(self._display_date(str(extras.get('date_production', '') or ''))), value_style)],
+                    [Paragraph("Date de péremption", label_style), Paragraph(":", label_style), Paragraph(escape(self._display_date(str(extras.get('date_peremption', '') or ''))), value_style)],
                     [Paragraph("Lot", label_style), Paragraph(":", label_style), Paragraph(escape(str(extras.get('num_lot', '') or '')), value_style)],
-                    [Paragraph("N° PRL", label_style), Paragraph(":", label_style), Paragraph(escape(num_prl), value_style)],
-                    [Paragraph("Date commerce", label_style), Paragraph(":", label_style), Paragraph(escape(date_commerce), value_style)],
+                    [Paragraph("Date commerce", label_style), Paragraph(":", label_style), Paragraph(escape(self._display_date(date_commerce)), value_style)],
                     [Paragraph("Procès-verbal de prélèvement", label_style), Paragraph(":", label_style), Paragraph(escape(proces_verbal), value_style)],
                     [Paragraph("Société / Etablissement", label_style), Paragraph(":", label_style), Paragraph(fd['company_name'], value_style)],
                     [Paragraph("Analyse", label_style), Paragraph(":", label_style), Paragraph(escape(str(extras.get('analyse', '') or '')), value_style)],
@@ -552,13 +555,12 @@ class CertificatePrinter:
                 extras = entry[3] if len(entry) > 3 else {}
                 year_two_digits = date.today().strftime("%y")
                 num_cert = str(extras.get("num_cert", "") or "").strip()
-                header_number = f"N°{num_cert}/{year_two_digits}-" if num_cert else f"N°/{year_two_digits}-"
+                header_number = f"N°{num_cert}/{year_two_digits}MSANP/SG/ACSSQDA/{cert_type}" if num_cert else f"N°/{year_two_digits}MSANP/SG/ACSSQDA/{cert_type}"
 
                 story.append(build_header_table())
-                story.append(Spacer(1, 8))
-                story.append(Paragraph(f"<u>{_TITLES[cert_type]}</u>", title_style))
+                story.append(Spacer(1, 6))
+                story.append(Paragraph(_TITLES[cert_type], title_style))
                 story.append(Paragraph(header_number, title_sub_style))
-                story.append(Paragraph(f"MSANP/SG/ACSSQDA/{cert_type}", title_sub_style))
                 story.append(Spacer(1, 8))
                 story.append(
                     Paragraph(

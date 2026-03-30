@@ -2,7 +2,7 @@ from models.database.tables import Tables
 
 class DatabaseManager(Tables):
     table_name = ""
-    CURRENT_SCHEMA_VERSION = 2
+    CURRENT_SCHEMA_VERSION = 3
     SCHEMA_VERSION_KEY = "schema_version"
     MYSQL_SCHEMA_LOCK_NAME = "fac_schema_bootstrap"
     MYSQL_SCHEMA_LOCK_TIMEOUT_SECONDS = 15
@@ -12,6 +12,12 @@ class DatabaseManager(Tables):
     def _normalize_num_act(value):
         text = str(value or "").strip()
         return text or None
+
+    @staticmethod
+    def _normalize_bool_flag(value):
+        if value is None:
+            return None
+        return 1 if bool(value) else 0
 
     @staticmethod
     def _format_amount_for_display(value):
@@ -130,9 +136,12 @@ class DatabaseManager(Tables):
         self._ensure_column("certificate_entry", "num_cert", "VARCHAR(255) NULL")
         self._ensure_column("certificate_entry", "classe", "VARCHAR(255) NULL")
         self._ensure_column("certificate_entry", "date_production", "VARCHAR(32) NULL")
+        self._ensure_column("certificate_entry", "date_production_modified", "INT NULL")
         self._ensure_column("certificate_entry", "date_peremption", "VARCHAR(32) NULL")
+        self._ensure_column("certificate_entry", "date_peremption_modified", "INT NULL")
         self._ensure_column("certificate_entry", "num_prl", "VARCHAR(255) NULL")
         self._ensure_column("certificate_entry", "date_commerce", "VARCHAR(32) NULL")
+        self._ensure_column("certificate_entry", "date_commerce_modified", "INT NULL")
         self._ensure_column("certificate_entry", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
         self._ensure_column("users", "role", "VARCHAR(32) NOT NULL DEFAULT 'user'")
         self._ensure_column("users", "is_active", "INT NOT NULL DEFAULT 1")
@@ -722,7 +731,8 @@ class DatabaseManager(Tables):
         try:
             query = (
                 "SELECT invoice_id, invoice_type, product_id, certificate_type, quantity, quantity_analysee, "
-                "num_lot, num_act, num_cert, classe, date_production, date_peremption, num_prl, date_commerce "
+                "num_lot, num_act, num_cert, classe, date_production, date_production_modified, "
+                "date_peremption, date_peremption_modified, num_prl, date_commerce, date_commerce_modified "
                 "FROM certificate_entry WHERE invoice_id=%s AND invoice_type=%s"
             )
             params = [invoice_id, invoice_type]
@@ -745,9 +755,12 @@ class DatabaseManager(Tables):
             "num_cert": str(payload.get("num_cert") or "").strip(),
             "classe": str(payload.get("classe") or "").strip(),
             "date_production": str(payload.get("date_production") or "").strip(),
+            "date_production_modified": self._normalize_bool_flag(payload.get("date_production_modified")),
             "date_peremption": str(payload.get("date_peremption") or "").strip(),
+            "date_peremption_modified": self._normalize_bool_flag(payload.get("date_peremption_modified")),
             "num_prl": str(payload.get("num_prl") or "").strip(),
             "date_commerce": str(payload.get("date_commerce") or "").strip(),
+            "date_commerce_modified": self._normalize_bool_flag(payload.get("date_commerce_modified")),
         }
 
         with self.transaction():
@@ -760,7 +773,8 @@ class DatabaseManager(Tables):
             if existing:
                 self.cursor.execute(
                     "UPDATE certificate_entry SET quantity=%s, quantity_analysee=%s, num_lot=%s, num_act=%s, "
-                    "num_cert=%s, classe=%s, date_production=%s, date_peremption=%s, num_prl=%s, date_commerce=%s "
+                    "num_cert=%s, classe=%s, date_production=%s, date_production_modified=%s, "
+                    "date_peremption=%s, date_peremption_modified=%s, num_prl=%s, date_commerce=%s, date_commerce_modified=%s "
                     "WHERE invoice_id=%s AND invoice_type=%s AND product_id=%s AND certificate_type=%s",
                     (
                         normalized_payload["quantity"],
@@ -770,9 +784,12 @@ class DatabaseManager(Tables):
                         normalized_payload["num_cert"],
                         normalized_payload["classe"],
                         normalized_payload["date_production"],
+                        normalized_payload["date_production_modified"],
                         normalized_payload["date_peremption"],
+                        normalized_payload["date_peremption_modified"],
                         normalized_payload["num_prl"],
                         normalized_payload["date_commerce"],
+                        normalized_payload["date_commerce_modified"],
                         invoice_id,
                         invoice_type,
                         product_id,
@@ -783,8 +800,9 @@ class DatabaseManager(Tables):
 
             self.cursor.execute(
                 "INSERT INTO certificate_entry (invoice_id, invoice_type, product_id, certificate_type, quantity, quantity_analysee, "
-                "num_lot, num_act, num_cert, classe, date_production, date_peremption, num_prl, date_commerce) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "num_lot, num_act, num_cert, classe, date_production, date_production_modified, date_peremption, "
+                "date_peremption_modified, num_prl, date_commerce, date_commerce_modified) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     invoice_id,
                     invoice_type,
@@ -797,9 +815,12 @@ class DatabaseManager(Tables):
                     normalized_payload["num_cert"],
                     normalized_payload["classe"],
                     normalized_payload["date_production"],
+                    normalized_payload["date_production_modified"],
                     normalized_payload["date_peremption"],
+                    normalized_payload["date_peremption_modified"],
                     normalized_payload["num_prl"],
                     normalized_payload["date_commerce"],
+                    normalized_payload["date_commerce_modified"],
                 ),
             )
             return self.cursor.lastrowid

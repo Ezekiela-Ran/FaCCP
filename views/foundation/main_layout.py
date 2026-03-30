@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QMessageBox, QInputDialog
+from PySide6 import QtCore
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QMessageBox, QInputDialog, QProgressDialog
 import datetime
 from views.foundation.head_layout import HeadLayout
 from views.foundation.body_layout import BodyLayout
@@ -7,10 +8,43 @@ from views.foundation.globals import GlobalVariable
 from views.auth import DatabaseConfigDialog, UserManagementDialog
 from models.database_manager import DatabaseManager
 
+
+class CounterInitializationWorker(QtCore.QObject):
+    succeeded = QtCore.Signal(int, int)
+    failed = QtCore.Signal(str, str)
+    finished = QtCore.Signal()
+
+    def __init__(self, invoice_start: int, ref_start: int):
+        super().__init__()
+        self.invoice_start = int(invoice_start)
+        self.ref_start = int(ref_start)
+
+    @QtCore.Slot()
+    def run(self):
+        db = None
+        try:
+            db = DatabaseManager()
+            db.initialize_document_counters(self.invoice_start, self.ref_start)
+        except ValueError as exc:
+            self.failed.emit("warning", str(exc))
+        except Exception as exc:
+            self.failed.emit("critical", f"L'initialisation a échoué : {exc}")
+        else:
+            self.succeeded.emit(self.invoice_start, self.ref_start)
+        finally:
+            if db is not None:
+                db.close()
+            self.finished.emit()
+
 class MainLayout(QWidget):
     def __init__(self, parent, on_logout=None):
         super().__init__(parent)
         self.on_logout = on_logout
+        self._counter_init_thread = None
+        self._counter_init_worker = None
+        self._counter_init_progress = None
+        self._last_invoice_start = 1
+        self._last_ref_start = 1
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(8)
@@ -51,24 +85,12 @@ class MainLayout(QWidget):
         self.build_ui("proforma")
 
     def menubar_click_initialize_counters(self):
-        db = DatabaseManager()
         try:
-            if db.has_invoice_history():
-                QMessageBox.warning(
-                    self,
-                    "Initialisation impossible",
-                    "Des factures existent déjà dans la base. L'ID de facture et la Ref.b.analyse ne peuvent plus être modifiés.",
-                )
-                return
-
-            default_invoice_start = int(db.get_setting("invoice_id_start", 1) or 1)
-            default_ref_start = int(db.get_setting("ref_b_analyse_start", 1) or 1)
-
             invoice_start, ok = QInputDialog.getInt(
                 self,
                 "Initialiser l'ID de facture",
                 "Valeur de départ pour l'ID de facture :",
-                value=default_invoice_start,
+                value=self._last_invoice_start,
                 minValue=1,
             )
             if not ok:
@@ -78,24 +100,76 @@ class MainLayout(QWidget):
                 self,
                 "Initialiser Ref.b.analyse",
                 "Valeur de départ pour Ref.b.analyse :",
-                value=default_ref_start,
+                value=self._last_ref_start,
                 minValue=1,
             )
             if not ok:
                 return
 
-            db.initialize_document_counters(invoice_start, ref_start)
-            QMessageBox.information(
-                self,
-                "Initialisation réussie",
-                f"Les prochains identifiants commenceront à {invoice_start} pour les factures et à {ref_start} pour Ref.b.analyse.",
-            )
+            self._start_counter_initialization(invoice_start, ref_start)
         except ValueError as exc:
             QMessageBox.warning(self, "Initialisation impossible", str(exc))
         except Exception as exc:
             QMessageBox.critical(self, "Erreur", f"L'initialisation a échoué : {exc}")
-        finally:
-            db.close()
+
+    def _start_counter_initialization(self, invoice_start: int, ref_start: int):
+        if self._counter_init_thread is not None:
+            QMessageBox.information(
+                self,
+                "Initialisation en cours",
+                "Une initialisation des compteurs est déjà en cours sur ce poste.",
+            )
+            return
+
+        self._counter_init_progress = QProgressDialog(
+            "Initialisation des compteurs en cours...",
+            None,
+            0,
+            0,
+            self,
+        )
+        self._counter_init_progress.setWindowTitle("Initialisation")
+        self._counter_init_progress.setCancelButton(None)
+        self._counter_init_progress.setMinimumDuration(0)
+        self._counter_init_progress.setWindowModality(QtCore.Qt.WindowModality.ApplicationModal)
+        self._counter_init_progress.show()
+
+        self._counter_init_thread = QtCore.QThread(self)
+        self._counter_init_worker = CounterInitializationWorker(invoice_start, ref_start)
+        self._counter_init_worker.moveToThread(self._counter_init_thread)
+
+        self._counter_init_thread.started.connect(self._counter_init_worker.run)
+        self._counter_init_worker.succeeded.connect(self._handle_counter_init_success)
+        self._counter_init_worker.failed.connect(self._handle_counter_init_failure)
+        self._counter_init_worker.finished.connect(self._counter_init_thread.quit)
+        self._counter_init_worker.finished.connect(self._counter_init_worker.deleteLater)
+        self._counter_init_thread.finished.connect(self._cleanup_counter_initialization)
+        self._counter_init_thread.finished.connect(self._counter_init_thread.deleteLater)
+
+        self._counter_init_thread.start()
+
+    def _handle_counter_init_success(self, invoice_start: int, ref_start: int):
+        self._last_invoice_start = int(invoice_start)
+        self._last_ref_start = int(ref_start)
+        QMessageBox.information(
+            self,
+            "Initialisation réussie",
+            f"Les prochains identifiants commenceront à {invoice_start} pour les factures et à {ref_start} pour Ref.b.analyse.",
+        )
+
+    def _handle_counter_init_failure(self, severity: str, message: str):
+        if severity == "warning":
+            QMessageBox.warning(self, "Initialisation impossible", message)
+            return
+        QMessageBox.critical(self, "Erreur", message)
+
+    def _cleanup_counter_initialization(self):
+        if self._counter_init_progress is not None:
+            self._counter_init_progress.close()
+            self._counter_init_progress.deleteLater()
+            self._counter_init_progress = None
+        self._counter_init_worker = None
+        self._counter_init_thread = None
 
     def menubar_click_reset(self):
         db = DatabaseManager()

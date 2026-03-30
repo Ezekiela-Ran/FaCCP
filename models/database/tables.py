@@ -33,7 +33,7 @@ class Tables:
                     f"pour la base {self.database_name}. Verifiez que le serveur MySQL est demarre "
                     "et que l'adresse configuree est correcte."
                 ) from exc
-            self.conn.autocommit = False
+            self.conn.autocommit = True
         else:
             self.conn = connect_sqlite(Path(self.settings['sqlite_path']))
         self.cursor = self.conn.cursor(dictionary=True)

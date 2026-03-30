@@ -6,6 +6,7 @@ class DatabaseManager(Tables):
     SCHEMA_VERSION_KEY = "schema_version"
     MYSQL_SCHEMA_LOCK_NAME = "fac_schema_bootstrap"
     MYSQL_SCHEMA_LOCK_TIMEOUT_SECONDS = 15
+    MYSQL_COUNTER_INIT_LOCK_WAIT_SECONDS = 5
 
     @staticmethod
     def _normalize_num_act(value):
@@ -274,11 +275,47 @@ class DatabaseManager(Tables):
             )
 
         with self.transaction():
-            self.reset_table_sequence("standard_invoice", invoice_start)
-            self.reset_table_sequence("proforma_invoice", invoice_start)
             self.set_setting("ref_b_analyse_start", ref_start)
             self.set_setting("ref_b_analyse_last", ref_start - 1)
             self.set_setting("invoice_id_start", invoice_start)
+
+    def _table_has_rows(self, table_name: str) -> bool:
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(f"SELECT EXISTS(SELECT 1 FROM {table_name} LIMIT 1)")
+            row = cursor.fetchone()
+            return bool(row and row[0])
+        finally:
+            cursor.close()
+
+    def _get_seed_invoice_id(self, table_name: str):
+        if self._table_has_rows(table_name):
+            return None
+
+        configured_start = self.get_setting("invoice_id_start", 1)
+        try:
+            invoice_id = int(configured_start or 1)
+        except (TypeError, ValueError):
+            invoice_id = 1
+        return max(invoice_id, 1)
+
+    def _insert_invoice_header(self, table_name: str, payload: dict):
+        seed_id = self._get_seed_invoice_id(table_name)
+        columns = list(payload.keys())
+        values = [payload[column] for column in columns]
+        if seed_id is not None:
+            columns = ["id", *columns]
+            values = [seed_id, *values]
+
+        placeholders = ", ".join(["%s"] * len(columns))
+        column_clause = ", ".join(columns)
+        self.cursor.execute(
+            f"INSERT INTO {table_name} ({column_clause}) VALUES ({placeholders})",
+            tuple(values),
+        )
+        if seed_id is not None:
+            return seed_id
+        return self.cursor.lastrowid
 
     def get_max_ref_b_analyse(self):
         """Return the last allocated global ref_b_analyse (int) or configured start-1."""
@@ -532,11 +569,20 @@ class DatabaseManager(Tables):
     
     def save_standard_invoice(self, company_name, stat, nif, address, date_issue, date_result, product_ref, resp, total, selected_products, selected_refs=None, selected_num_acts=None):
         with self.transaction():
-            self.cursor.execute(
-                "INSERT INTO standard_invoice (company_name, stat, nif, address, date_issue, date_result, product_ref, resp, total) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (company_name, stat, nif, address, date_issue, date_result, product_ref, resp, total)
+            invoice_id = self._insert_invoice_header(
+                "standard_invoice",
+                {
+                    "company_name": company_name,
+                    "stat": stat,
+                    "nif": nif,
+                    "address": address,
+                    "date_issue": date_issue,
+                    "date_result": date_result,
+                    "product_ref": product_ref,
+                    "resp": resp,
+                    "total": total,
+                },
             )
-            invoice_id = self.cursor.lastrowid
 
             selected_refs = selected_refs or {}
             selected_num_acts = selected_num_acts or {}
@@ -594,11 +640,17 @@ class DatabaseManager(Tables):
 
     def save_proforma_invoice(self, company_name, nif, stat, date, resp, total, selected_products):
         with self.transaction():
-            self.cursor.execute(
-                "INSERT INTO proforma_invoice (company_name, nif, stat, date, resp, total) VALUES (%s, %s, %s, %s, %s, %s)",
-                (company_name, nif, stat, date, resp, total)
+            invoice_id = self._insert_invoice_header(
+                "proforma_invoice",
+                {
+                    "company_name": company_name,
+                    "nif": nif,
+                    "stat": stat,
+                    "date": date,
+                    "resp": resp,
+                    "total": total,
+                },
             )
-            invoice_id = self.cursor.lastrowid
 
             for product_id in selected_products:
                 product = self.get_product_by_id(product_id)
@@ -687,9 +739,10 @@ class DatabaseManager(Tables):
                 archive_name = f"{tbl}_archive_{suffix}"
                 if self.is_mysql:
                     self.cursor.execute(f"CREATE TABLE IF NOT EXISTS {archive_name} LIKE {tbl}")
+                    self.cursor.execute(f"INSERT IGNORE INTO {archive_name} SELECT * FROM {tbl}")
                 else:
                     self.cursor.execute(f"CREATE TABLE IF NOT EXISTS {archive_name} AS SELECT * FROM {tbl} WHERE 0")
-                self.cursor.execute(f"INSERT INTO {archive_name} SELECT * FROM {tbl}")
+                    self.cursor.execute(f"INSERT INTO {archive_name} SELECT * FROM {tbl}")
 
             self.set_foreign_keys(False)
             try:

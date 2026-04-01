@@ -1,9 +1,12 @@
+from datetime import datetime, timezone
+
 from models.database.tables import Tables
 
 class DatabaseManager(Tables):
     table_name = ""
     CURRENT_SCHEMA_VERSION = 3
     SCHEMA_VERSION_KEY = "schema_version"
+    CATALOG_UPDATED_AT_KEY = "catalog_updated_at"
 
     @staticmethod
     def _normalize_num_act(value):
@@ -23,6 +26,10 @@ class DatabaseManager(Tables):
         except (TypeError, ValueError):
             amount = 0
         return f"{amount:,}".replace(",", " ") + " Ar"
+
+    @staticmethod
+    def _catalog_timestamp_now():
+        return datetime.now(timezone.utc).isoformat(timespec="microseconds")
 
     @classmethod
     def create_tables(cls):
@@ -227,6 +234,7 @@ class DatabaseManager(Tables):
     def get_catalog_signature(self):
         cursor = self.conn.cursor(dictionary=True)
         try:
+            catalog_updated_at = self.get_setting(self.CATALOG_UPDATED_AT_KEY)
             cursor.execute(
                 "SELECT COUNT(*) AS item_count, COALESCE(MAX(id), 0) AS max_id FROM product_type"
             )
@@ -236,6 +244,7 @@ class DatabaseManager(Tables):
             )
             product_signature = cursor.fetchone() or {"item_count": 0, "max_id": 0}
             return {
+                "catalog_updated_at": str(catalog_updated_at or ""),
                 "type_count": int(type_signature.get("item_count") or 0),
                 "type_max_id": int(type_signature.get("max_id") or 0),
                 "product_count": int(product_signature.get("item_count") or 0),
@@ -243,6 +252,9 @@ class DatabaseManager(Tables):
             }
         finally:
             cursor.close()
+
+    def touch_catalog(self):
+        self.set_setting(self.CATALOG_UPDATED_AT_KEY, self._catalog_timestamp_now())
 
     def initialize_document_counters(self, invoice_start, ref_start):
         invoice_start = int(invoice_start)
@@ -357,6 +369,7 @@ class DatabaseManager(Tables):
             query = "INSERT INTO product_type (product_type_name) VALUES (%s)"
             cursor.execute(query, (name,))
             self.conn.commit()
+            self.touch_catalog()
             return cursor.lastrowid
         finally:
             cursor.close()
@@ -454,6 +467,7 @@ class DatabaseManager(Tables):
                 (name, type_id),
             )
             self.conn.commit()
+            self.touch_catalog()
         finally:
             cursor.close()
 
@@ -476,6 +490,7 @@ class DatabaseManager(Tables):
             # Supprimer le type
             cursor.execute("DELETE FROM product_type WHERE id = %s", (type_id,))
             self.conn.commit()
+            self.touch_catalog()
         finally:
             cursor.close()
 
@@ -490,6 +505,7 @@ class DatabaseManager(Tables):
             (type_id, product_name, ref, normalized_num_act, physico, toxico, micro, subtotal)
         )
         self.conn.commit()
+        self.touch_catalog()
         return self.cursor.lastrowid
 
     def update_product_name(self, product_id, product_name):
@@ -498,6 +514,7 @@ class DatabaseManager(Tables):
             (product_name, product_id),
         )
         self.conn.commit()
+        self.touch_catalog()
 
     def product_is_used_in_records(self, product_id):
         self.cursor.execute(
@@ -510,6 +527,7 @@ class DatabaseManager(Tables):
     def delete_product(self, product_id):
         self.cursor.execute("DELETE FROM products WHERE id=%s", (product_id,))
         self.conn.commit()
+        self.touch_catalog()
 
     def is_num_act_unique(self, num_act, exclude_product_id=None):
         normalized_num_act = self._normalize_num_act(num_act)
@@ -545,7 +563,7 @@ class DatabaseManager(Tables):
                 )
         finally:
             self.conn.commit()
-        self.conn.commit()
+        self.touch_catalog()
     
     def save_standard_invoice(self, company_name, stat, nif, address, date_issue, date_result, product_ref, resp, total, selected_products, selected_refs=None, selected_num_acts=None):
         with self.transaction():

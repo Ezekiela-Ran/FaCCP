@@ -106,12 +106,11 @@ class ProductManager(QWidget):
         if has_selection:
             self.load_products()
 
-        if not self.can_manage_catalog:
-            self.catalog_signature = self._safe_catalog_signature()
-            self.catalog_refresh_timer = QTimer(self)
-            self.catalog_refresh_timer.setInterval(CATALOG_REFRESH_INTERVAL_MS)
-            self.catalog_refresh_timer.timeout.connect(self.refresh_catalog_silently)
-            self.catalog_refresh_timer.start()
+        self.catalog_signature = self._safe_catalog_signature()
+        self.catalog_refresh_timer = QTimer(self)
+        self.catalog_refresh_timer.setInterval(CATALOG_REFRESH_INTERVAL_MS)
+        self.catalog_refresh_timer.timeout.connect(self.refresh_catalog_silently)
+        self.catalog_refresh_timer.start()
 
     def _apply_role_permissions(self):
         self.add_type_btn.setVisible(self.can_manage_catalog)
@@ -170,8 +169,7 @@ class ProductManager(QWidget):
         name, ok = QInputDialog.getText(self, "Nouveau Type", "Nom du type:")
         if ok and name:
             new_type_id = self.product_service.insert_type(name)
-            if self.load_types(selected_type_id=new_type_id):
-                self.load_products()
+            self._after_local_catalog_change(selected_type_id=new_type_id)
 
     def edit_type(self):
         if not self.can_manage_catalog:
@@ -187,7 +185,7 @@ class ProductManager(QWidget):
         name = (name or "").strip()
         if ok and name:
             self.product_service.update_type_name(tid, name)
-            item.setText(name)
+            self._after_local_catalog_change(selected_type_id=tid)
 
     def del_type(self):
         if not self.can_manage_catalog:
@@ -198,10 +196,7 @@ class ProductManager(QWidget):
         tid = item.data(Qt.UserRole)  # récupérer l'ID stocké
         try:
             self.product_service.delete_type(tid)
-            if self.load_types():
-                self.load_products()
-            else:
-                self.product_table.setRowCount(0)
+            self._after_local_catalog_change()
         except ValueError as e:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Suppression impossible", str(e))
@@ -216,8 +211,8 @@ class ProductManager(QWidget):
         tid = self.type_list.currentItem().data(Qt.UserRole)
         name, ok = QInputDialog.getText(self, "Nouveau Produit", "Nom du produit:")
         if ok and name:
-            pid = self.product_service.add_product(tid, name)
-            self.add_product_row(pid, name, "0", "", "0", "0", "0", "0")
+            self.product_service.add_product(tid, name)
+            self._after_local_catalog_change(selected_type_id=tid)
 
     def add_product_row(self, pid, name, ref, num_act, physico, toxico, micro, subtotal):
         row = self.product_table.rowCount()
@@ -410,8 +405,11 @@ class ProductManager(QWidget):
             return False
 
         if new_name != item.text().strip():
+            self.product_table.removeCellWidget(row, 0)
             self.product_service.update_product_name(pid, new_name)
-            item.setText(new_name)
+            current_type_id = self.type_list.currentItem().data(Qt.UserRole) if self.type_list.currentItem() else None
+            self._after_local_catalog_change(selected_type_id=current_type_id)
+            return True
 
         self.product_table.removeCellWidget(row, 0)
         return True
@@ -493,8 +491,9 @@ class ProductManager(QWidget):
                 "Ce produit ne peut pas être supprimé car il est déjà utilisé dans des enregistrements."
             )
             return
+        current_type_id = self.type_list.currentItem().data(Qt.UserRole) if self.type_list.currentItem() else None
         self.product_service.delete_product(pid)
-        self.product_table.removeRow(row)
+        self._after_local_catalog_change(selected_type_id=current_type_id)
 
     def on_price_component_changed(self, row):
         if self.invoice_type == "standard":
@@ -772,7 +771,7 @@ class ProductManager(QWidget):
             return None
 
     def refresh_catalog_silently(self):
-        if self.can_manage_catalog or not self.isVisible():
+        if not self.isVisible():
             return
 
         latest_signature = self._safe_catalog_signature()
@@ -788,11 +787,16 @@ class ProductManager(QWidget):
         self._reload_catalog_preserving_state()
         self._show_catalog_notification("Le catalogue a été mis à jour automatiquement.")
 
-    def _reload_catalog_preserving_state(self):
-        current_type_id = None
-        current_item = self.type_list.currentItem()
-        if current_item is not None:
-            current_type_id = current_item.data(Qt.UserRole)
+    def _after_local_catalog_change(self, selected_type_id=None):
+        self._reload_catalog_preserving_state(selected_type_id=selected_type_id)
+        self.catalog_signature = self._safe_catalog_signature()
+
+    def _reload_catalog_preserving_state(self, selected_type_id=None):
+        current_type_id = selected_type_id
+        if current_type_id is None:
+            current_item = self.type_list.currentItem()
+            if current_item is not None:
+                current_type_id = current_item.data(Qt.UserRole)
 
         has_selection = self.load_types(selected_type_id=current_type_id)
         if has_selection:

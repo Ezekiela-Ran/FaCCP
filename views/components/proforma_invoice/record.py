@@ -52,6 +52,8 @@ class ProformaInvoiceRecord(QtWidgets.QWidget):
             form.responsable_input.setText(GlobalVariable.current_username())
             if hasattr(form, 'date_input') and invoice['date']:
                 form.date_input.setDate(QDate.fromString(str(invoice['date']), "yyyy-MM-dd"))
+            if hasattr(form, 'proforma_invoice_number'):
+                form.proforma_invoice_number.setText(str(invoice['id']))
             
             # Enregistrer l'ID sélectionné pour une modification sur Enregistrer
             if hasattr(self.parent().parent(), 'body_layout'):

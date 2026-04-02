@@ -34,12 +34,10 @@ class ProductManager(QWidget):
         root_layout.setSpacing(8)
 
         self.catalog_notification = QLabel("")
-        self.catalog_notification.setVisible(False)
+        self.catalog_notification.setMinimumHeight(34)
         self.catalog_notification.setWordWrap(True)
         self.catalog_notification.setAlignment(Qt.AlignCenter)
-        self.catalog_notification.setStyleSheet(
-            "background-color: #264b2f; color: white; border: 1px solid #4b8a58; border-radius: 4px; padding: 6px 10px;"
-        )
+        self._clear_catalog_notification()
         root_layout.addWidget(self.catalog_notification)
 
         # cadre principale
@@ -94,7 +92,7 @@ class ProductManager(QWidget):
         self._apply_stylesheet("styles/product_manager.qss")
         self.catalog_notice_timer = QTimer(self)
         self.catalog_notice_timer.setSingleShot(True)
-        self.catalog_notice_timer.timeout.connect(self.catalog_notification.hide)
+        self.catalog_notice_timer.timeout.connect(self._clear_catalog_notification)
         self.catalog_refresh_timer = None
 
         # Connexions
@@ -120,6 +118,12 @@ class ProductManager(QWidget):
         self.edit_type_btn.setVisible(self.can_manage_catalog)
         self.del_type_btn.setVisible(self.can_manage_catalog)
         self.add_product_btn.setVisible(self.can_manage_catalog)
+        if self.invoice_type == "proforma":
+            self.product_table.setColumnHidden(5, not self.can_manage_catalog)
+            self.product_table.setColumnHidden(6, not self.can_manage_catalog)
+        else:
+            self.product_table.setColumnHidden(7, not self.can_manage_catalog)
+            self.product_table.setColumnHidden(8, not self.can_manage_catalog)
     
     def load_types(self, selected_type_id=None):
         if selected_type_id is None and self.type_list.currentItem():
@@ -293,6 +297,10 @@ class ProductManager(QWidget):
         btn_del.clicked.connect(lambda: self.delete_product_row(pid, row))
         btn_mod.clicked.connect(self.toggle_edit_from_sender)
         btn_sel.clicked.connect(lambda: self.toggle_select(pid, row))
+
+        if not self.can_manage_catalog:
+            btn_del.setVisible(False)
+            btn_mod.setVisible(False)
 
         btn_del.setEnabled(self.can_manage_catalog and not self.loaded_record_locked)
         btn_mod.setEnabled(self.can_manage_catalog)
@@ -942,8 +950,16 @@ class ProductManager(QWidget):
 
     def _show_catalog_notification(self, message):
         self.catalog_notification.setText(message)
-        self.catalog_notification.setVisible(True)
+        self.catalog_notification.setStyleSheet(
+            "background-color: #264b2f; color: white; border: 1px solid #4b8a58; border-radius: 4px; padding: 6px 10px;"
+        )
         self.catalog_notice_timer.start(4000)
+
+    def _clear_catalog_notification(self):
+        self.catalog_notification.setText("")
+        self.catalog_notification.setStyleSheet(
+            "background: transparent; color: transparent; border: 1px solid transparent; padding: 6px 10px;"
+        )
 
     def _cancel_edit_if_active(self, row):
         """If a row is in edit mode (widgets not-readonly), cancel it cleanly."""

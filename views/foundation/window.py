@@ -13,7 +13,7 @@ class Window(QtWidgets.QWidget):
         height = self.screen().size().height()
         width = self.screen().size().width()
         
-        self.setWindowTitle("FacCP (Facture et Certificat de produit)")
+        self.setWindowTitle("FacCP (Facture et Certificat de produits)")
         icon_path = resolve_resource_path("images/image.png")
         if icon_path.exists():
             self.setWindowIcon(QtGui.QIcon(str(icon_path)))

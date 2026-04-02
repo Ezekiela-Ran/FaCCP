@@ -104,7 +104,7 @@ class InvoicePrinter:
             date_issue = form.date_input.date().toString('dd/MM/yyyy') if hasattr(form, 'date_input') else ''
             date_result = ''
             product_ref_raw = ''
-            title = 'FACTURE PROFORMA'
+            title = f'FACTURE PROFORMA N°{invoice_id}' if invoice_id else 'FACTURE PROFORMA'
         
         # Récupérer les produits
         products = []

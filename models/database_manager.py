@@ -4,9 +4,13 @@ from models.database.tables import Tables
 
 class DatabaseManager(Tables):
     table_name = ""
-    CURRENT_SCHEMA_VERSION = 3
+    CURRENT_SCHEMA_VERSION = 4
     SCHEMA_VERSION_KEY = "schema_version"
     CATALOG_UPDATED_AT_KEY = "catalog_updated_at"
+    CERTIFICATE_COUNTER_KEYS = {
+        "CC": ("cert_cc_start", "cert_cc_last"),
+        "CNC": ("cert_cnc_start", "cert_cnc_last"),
+    }
 
     @staticmethod
     def _normalize_num_act(value):
@@ -99,6 +103,8 @@ class DatabaseManager(Tables):
         self._ensure_column("certificate_entry", "num_prl", "VARCHAR(255) NULL")
         self._ensure_column("certificate_entry", "date_commerce", "VARCHAR(32) NULL")
         self._ensure_column("certificate_entry", "date_commerce_modified", "INT NULL")
+        self._ensure_column("certificate_entry", "date_cert", "VARCHAR(32) NULL")
+        self._ensure_column("certificate_entry", "date_cert_modified", "INT NULL")
         self._ensure_column("certificate_entry", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
         self._ensure_column("users", "role", "VARCHAR(32) NOT NULL DEFAULT 'user'")
         self._ensure_column("users", "is_active", "INT NOT NULL DEFAULT 1")
@@ -208,11 +214,11 @@ class DatabaseManager(Tables):
         cursor = self.conn.cursor()
         try:
             cursor.execute(
-                "SELECT COUNT(*) FROM app_settings WHERE setting_key IN (%s, %s)",
-                ("invoice_id_start", "ref_b_analyse_start"),
+                "SELECT COUNT(*) FROM app_settings WHERE setting_key IN (%s, %s, %s, %s)",
+                ("invoice_id_start", "ref_b_analyse_start", "cert_cc_start", "cert_cnc_start"),
             )
             row = cursor.fetchone()
-            return bool(row and row[0] > 0)
+            return bool(row and row[0] == 4)
         finally:
             cursor.close()
 
@@ -256,10 +262,12 @@ class DatabaseManager(Tables):
     def touch_catalog(self):
         self.set_setting(self.CATALOG_UPDATED_AT_KEY, self._catalog_timestamp_now())
 
-    def initialize_document_counters(self, invoice_start, ref_start):
+    def initialize_document_counters(self, invoice_start, ref_start, cert_cc_start, cert_cnc_start):
         invoice_start = int(invoice_start)
         ref_start = int(ref_start)
-        if invoice_start < 1 or ref_start < 1:
+        cert_cc_start = int(cert_cc_start)
+        cert_cnc_start = int(cert_cnc_start)
+        if invoice_start < 1 or ref_start < 1 or cert_cc_start < 1 or cert_cnc_start < 1:
             raise ValueError("Les valeurs d'initialisation doivent être supérieures ou égales à 1.")
         if self.has_invoice_history():
             raise ValueError(
@@ -270,6 +278,34 @@ class DatabaseManager(Tables):
             self.set_setting("ref_b_analyse_start", ref_start)
             self.set_setting("ref_b_analyse_last", ref_start - 1)
             self.set_setting("invoice_id_start", invoice_start)
+            self.set_setting("cert_cc_start", cert_cc_start)
+            self.set_setting("cert_cc_last", cert_cc_start - 1)
+            self.set_setting("cert_cnc_start", cert_cnc_start)
+            self.set_setting("cert_cnc_last", cert_cnc_start - 1)
+
+    @classmethod
+    def _get_certificate_counter_keys(cls, cert_type: str):
+        normalized_type = str(cert_type or "").strip().upper()
+        if normalized_type not in cls.CERTIFICATE_COUNTER_KEYS:
+            raise ValueError(f"Type de certificat invalide : {cert_type}")
+        return cls.CERTIFICATE_COUNTER_KEYS[normalized_type]
+
+    def _get_existing_max_cert_number(self, cert_type: str) -> int:
+        normalized_type = str(cert_type or "").strip().upper()
+        cursor = self.conn.cursor()
+        try:
+            cast_expr = "CAST(num_cert AS UNSIGNED)" if self.is_mysql else "CAST(num_cert AS INTEGER)"
+            cursor.execute(
+                f"SELECT COALESCE(MAX({cast_expr}), 0) FROM certificate_entry "
+                "WHERE certificate_type=%s AND TRIM(COALESCE(num_cert, '')) <> ''",
+                (normalized_type,),
+            )
+            row = cursor.fetchone()
+            return int(row[0]) if row and row[0] is not None else 0
+        except Exception:
+            return 0
+        finally:
+            cursor.close()
 
     def _table_has_rows(self, table_name: str) -> bool:
         cursor = self.conn.cursor()
@@ -362,6 +398,46 @@ class DatabaseManager(Tables):
             next_ref = max(current + 1, start_value)
             self.set_setting("ref_b_analyse_last", next_ref)
             return next_ref
+
+    def get_max_cert_number(self, cert_type: str):
+        """Return the last allocated certificate number for the given type."""
+        start_key, last_key = self._get_certificate_counter_keys(cert_type)
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("SELECT setting_value FROM app_settings WHERE setting_key=%s", (last_key,))
+            row = cursor.fetchone()
+            if row and row[0] is not None:
+                try:
+                    return int(row[0])
+                except Exception:
+                    pass
+
+            existing_max = self._get_existing_max_cert_number(cert_type)
+            if existing_max > 0:
+                return existing_max
+
+            configured_start = self.get_setting(start_key, 1)
+            try:
+                return max(int(configured_start) - 1, 0)
+            except Exception:
+                return 0
+        finally:
+            cursor.close()
+
+    def allocate_next_cert_number(self, cert_type: str):
+        """Allocate and return the next certificate number for the given type."""
+        start_key, last_key = self._get_certificate_counter_keys(cert_type)
+        start = self.get_setting(start_key, 1)
+        try:
+            start_value = int(start)
+        except Exception:
+            start_value = 1
+
+        with self.transaction():
+            current = self.get_max_cert_number(cert_type)
+            next_value = max(current + 1, start_value)
+            self.set_setting(last_key, next_value)
+            return next_value
 
     def insert_type(self, name: str):
         cursor = self.conn.cursor()
@@ -700,7 +776,8 @@ class DatabaseManager(Tables):
             query = (
                 "SELECT invoice_id, invoice_type, product_id, certificate_type, quantity, quantity_analysee, "
                 "num_lot, num_act, num_cert, classe, date_production, date_production_modified, "
-                "date_peremption, date_peremption_modified, num_prl, date_commerce, date_commerce_modified "
+                "date_peremption, date_peremption_modified, num_prl, date_commerce, date_commerce_modified, "
+                "date_cert, date_cert_modified "
                 "FROM certificate_entry WHERE invoice_id=%s AND invoice_type=%s"
             )
             params = [invoice_id, invoice_type]
@@ -729,6 +806,8 @@ class DatabaseManager(Tables):
             "num_prl": str(payload.get("num_prl") or "").strip(),
             "date_commerce": str(payload.get("date_commerce") or "").strip(),
             "date_commerce_modified": self._normalize_bool_flag(payload.get("date_commerce_modified")),
+            "date_cert": str(payload.get("date_cert") or "").strip(),
+            "date_cert_modified": self._normalize_bool_flag(payload.get("date_cert_modified")),
         }
 
         with self.transaction():
@@ -742,7 +821,8 @@ class DatabaseManager(Tables):
                 self.cursor.execute(
                     "UPDATE certificate_entry SET quantity=%s, quantity_analysee=%s, num_lot=%s, num_act=%s, "
                     "num_cert=%s, classe=%s, date_production=%s, date_production_modified=%s, "
-                    "date_peremption=%s, date_peremption_modified=%s, num_prl=%s, date_commerce=%s, date_commerce_modified=%s "
+                    "date_peremption=%s, date_peremption_modified=%s, num_prl=%s, date_commerce=%s, date_commerce_modified=%s, "
+                    "date_cert=%s, date_cert_modified=%s "
                     "WHERE invoice_id=%s AND invoice_type=%s AND product_id=%s AND certificate_type=%s",
                     (
                         normalized_payload["quantity"],
@@ -758,6 +838,8 @@ class DatabaseManager(Tables):
                         normalized_payload["num_prl"],
                         normalized_payload["date_commerce"],
                         normalized_payload["date_commerce_modified"],
+                        normalized_payload["date_cert"],
+                        normalized_payload["date_cert_modified"],
                         invoice_id,
                         invoice_type,
                         product_id,
@@ -769,8 +851,8 @@ class DatabaseManager(Tables):
             self.cursor.execute(
                 "INSERT INTO certificate_entry (invoice_id, invoice_type, product_id, certificate_type, quantity, quantity_analysee, "
                 "num_lot, num_act, num_cert, classe, date_production, date_production_modified, date_peremption, "
-                "date_peremption_modified, num_prl, date_commerce, date_commerce_modified) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "date_peremption_modified, num_prl, date_commerce, date_commerce_modified, date_cert, date_cert_modified) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     invoice_id,
                     invoice_type,
@@ -789,6 +871,8 @@ class DatabaseManager(Tables):
                     normalized_payload["num_prl"],
                     normalized_payload["date_commerce"],
                     normalized_payload["date_commerce_modified"],
+                    normalized_payload["date_cert"],
+                    normalized_payload["date_cert_modified"],
                 ),
             )
             return self.cursor.lastrowid

@@ -177,6 +177,9 @@ class SaveInvoiceAction:
                     selected_products,
                 )
 
+            if hasattr(form, "proforma_invoice_number"):
+                form.proforma_invoice_number.setText(str(invoice_id))
+
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
         msg.setWindowTitle("Enregistrement réussi")

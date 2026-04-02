@@ -176,6 +176,7 @@ class CertificatePrinter:
         num_cert          = escape(extras.get("num_cert", ""))
         num_prl           = escape(extras.get("num_prl", ""))
         date_commerce     = escape(self._display_date(extras.get("date_commerce", "")))
+        certificate_date  = escape(str(extras.get("date_cert") or fd["date"]))
         reference         = escape(extras.get("reference", ""))
         ref_b_analyse     = escape(str(extras.get("ref_b_analyse", "") or ""))
         invoice_number    = escape(str(extras.get("invoice_number", "") or ""))
@@ -263,11 +264,9 @@ class CertificatePrinter:
     <tr><td><b>Quantité</b></td><td>:</td><td><b>{quantite}</b>  <span style="display:inline-block;width:24pt;"></span>
       <b>Quantité Analysée</b> : <b>{quantite_analysee}</b></td></tr>
     <tr><td><b>N° Certificat</b></td><td>:</td><td><b>{num_cert}</b></td></tr>
-    <tr><td><b>N° Acte</b></td><td>:</td><td><b>{num_acte}</b></td></tr>
     <tr><td><b>Date de production</b></td><td>:</td><td><b>{date_production}</b></td></tr>
     <tr><td><b>Date de péremption</b></td><td>:</td><td><b>{date_peremption}</b></td></tr>
     <tr><td><b>Lot</b></td><td>:</td><td><b>{num_lot}</b></td></tr>
-    <tr><td><b>Date commerce</b></td><td>:</td><td><b>{date_commerce}</b></td></tr>
     <tr><td><b>Procès-verbal de prélèvement</b></td><td>:</td><td><b>{proces_verbal}</b></td></tr>
     <tr><td><b>Société / Etablissement</b></td><td>:</td><td><b>{fd['company_name']}</b></td></tr>
     <tr><td><b>Responsable</b></td><td>:</td><td><b>{fd['responsable']}</b></td></tr>
@@ -290,7 +289,7 @@ class CertificatePrinter:
   </p>
 
   <p style="text-align:right;margin-top:8pt;font-size:10.8pt;font-weight:bold;">
-    Fait à Antananarivo, le {fd['date']}
+        Fait à Antananarivo, le {certificate_date}
   </p>
 
   <table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:4pt;">
@@ -300,7 +299,7 @@ class CertificatePrinter:
     </tr>
   </table>
 
-  <p style="margin-top:56pt;font-style:italic;font-size:9.6pt;">
+    <p style="margin-top:92pt;font-style:italic;font-size:9.6pt;">
     *Ce certificat est valable uniquement pour le LOT ayant fait l'objet d'analyse mentionnée ci-dessus
   </p>
 
@@ -528,11 +527,9 @@ class CertificatePrinter:
                     [Paragraph("Echantillon", label_style), Paragraph(":", label_style), Paragraph(escape(str(product_name or "")), value_style)],
                     [Paragraph("Classe", label_style), Paragraph(":", label_style), Paragraph(escape(str(extras.get('classe', '') or '')), value_style)],
                     [Paragraph("Quantité", label_style), Paragraph(":", label_style), Paragraph(quantity_value, value_style)],
-                    [Paragraph("N° Acte", label_style), Paragraph(":", label_style), Paragraph(escape(num_acte), value_style)],
                     [Paragraph("Date de production", label_style), Paragraph(":", label_style), Paragraph(escape(self._display_date(str(extras.get('date_production', '') or ''))), value_style)],
                     [Paragraph("Date de péremption", label_style), Paragraph(":", label_style), Paragraph(escape(self._display_date(str(extras.get('date_peremption', '') or ''))), value_style)],
                     [Paragraph("Lot", label_style), Paragraph(":", label_style), Paragraph(escape(str(extras.get('num_lot', '') or '')), value_style)],
-                    [Paragraph("Date commerce", label_style), Paragraph(":", label_style), Paragraph(escape(self._display_date(date_commerce)), value_style)],
                     [Paragraph("Procès-verbal de prélèvement", label_style), Paragraph(":", label_style), Paragraph(escape(proces_verbal), value_style)],
                     [Paragraph("Société / Etablissement", label_style), Paragraph(":", label_style), Paragraph(fd['company_name'], value_style)],
                     [Paragraph("Analyse", label_style), Paragraph(":", label_style), Paragraph(escape(str(extras.get('analyse', '') or '')), value_style)],
@@ -555,6 +552,7 @@ class CertificatePrinter:
                 extras = entry[3] if len(entry) > 3 else {}
                 year_two_digits = date.today().strftime("%y")
                 num_cert = str(extras.get("num_cert", "") or "").strip()
+                certificate_date = str(extras.get("date_cert") or fd["date"])
                 header_number = f"N°{num_cert}/{year_two_digits}MSANP/SG/ACSSQDA/{cert_type}" if num_cert else f"N°/{year_two_digits}MSANP/SG/ACSSQDA/{cert_type}"
 
                 story.append(build_header_table())
@@ -577,7 +575,7 @@ class CertificatePrinter:
                 story.append(Spacer(1, 7))
                 story.append(Paragraph("En foi de quoi, ce certificat est délivré pour servir et valoir ce que de droit.", declaration_style))
                 story.append(Spacer(1, 12))
-                story.append(Paragraph(f"Fait à Antananarivo, le {fd['date']}", date_style))
+                story.append(Paragraph(f"Fait à Antananarivo, le {escape(certificate_date)}", date_style))
                 story.append(Spacer(1, 12))
                 signature_table = Table(
                     [["", Paragraph("Le Directeur,", director_style)]],
@@ -592,7 +590,7 @@ class CertificatePrinter:
                     ('BOTTOMPADDING', (0,0), (-1,-1), 0),
                 ]))
                 story.append(signature_table)
-                story.append(Spacer(1, 38))
+                story.append(Spacer(1, 72))
                 story.append(Paragraph("*Ce certificat est valable uniquement pour le LOT ayant fait l'objet d'analyse mentionnée ci-dessus", note_style))
 
                 if index < len(assignments) - 1:

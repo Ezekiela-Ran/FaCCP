@@ -8,7 +8,7 @@ import platform
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak, KeepTogether
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 from PySide6.QtWidgets import QMessageBox
@@ -20,6 +20,22 @@ from utils.path_utils import resolve_resource_path
 class InvoicePrinter:
     def __init__(self, parent_widget):
         self.parent = parent_widget
+
+    @staticmethod
+    def _format_price(value, suffix=""):
+        text = str(value or "").replace("Ar", "").replace(" ", "").strip()
+        if not text:
+            return ""
+
+        try:
+            amount = int(float(text))
+        except (TypeError, ValueError):
+            return str(value or "").strip()
+
+        formatted = f"{amount:,}".replace(',', ' ')
+        if suffix:
+            return f"{formatted} {suffix}".strip()
+        return formatted
 
     @staticmethod
     def _draw_footer(canvas, doc):
@@ -122,7 +138,7 @@ class InvoicePrinter:
             products.append(prod)
         
         total = sum(float(p.get('subtotal', 0) or 0) for p in products)
-        total_formatted = f"{total:,.0f}".replace(',', ' ')
+        total_formatted = self._format_price(total)
         total_words = TextUtils.number_to_words(round(total)).upper()
         
         # Créer les styles
@@ -232,17 +248,17 @@ class InvoicePrinter:
         page_width = A4[0] - 60  # (30 marge gauche + 30 droite)
 
         if invoice_type == 'standard':
-            header_row = ['Réf. Bulletin', 'Désignations', 'N°Acte', 'Physico', 'Micro', 'Toxico', 'Sous-total']
+            header_row = ['Réf. Bulletin', 'Désignations', 'N°Acte', 'Physico', 'Micro', 'Toxico', 'Sous total (Ariary)']
             data_rows = [header_row]
             for prod in products:
                 data_rows.append([
                     str(prod.get('ref_b_analyse', '') or ''),
                     Paragraph(escape(str(prod.get('product_name', '') or '')), designation_style),
                     str(prod.get('num_act', '') or ''),
-                    str(prod.get('physico', '') or ''),
-                    str(prod.get('micro', '') or ''),
-                    str(prod.get('toxico', '') or ''),
-                    str(prod.get('subtotal', '') or ''),
+                    self._format_price(prod.get('physico', '')),
+                    self._format_price(prod.get('micro', '')),
+                    self._format_price(prod.get('toxico', '')),
+                    self._format_price(prod.get('subtotal', '')),
                 ])
             data_rows.append(['', '', '', '', '', 'Montant à payer', total_formatted + ' Ar'])
             col_widths = [
@@ -256,15 +272,15 @@ class InvoicePrinter:
             ]
             total_span_end = -3
         else:
-            header_row = ['Désignations', 'Physico', 'Micro', 'Toxico', 'Sous-total']
+            header_row = ['Désignations', 'Physico', 'Micro', 'Toxico', 'Sous total (Ariary)']
             data_rows = [header_row]
             for prod in products:
                 data_rows.append([
                     Paragraph(escape(str(prod.get('product_name', '') or '')), designation_style),
-                    str(prod.get('physico', '') or ''),
-                    str(prod.get('micro', '') or ''),
-                    str(prod.get('toxico', '') or ''),
-                    str(prod.get('subtotal', '') or ''),
+                    self._format_price(prod.get('physico', '')),
+                    self._format_price(prod.get('micro', '')),
+                    self._format_price(prod.get('toxico', '')),
+                    self._format_price(prod.get('subtotal', '')),
                 ])
             data_rows.append(['', '', '', 'Montant à payer', total_formatted + ' Ar'])
             col_widths = [
@@ -313,10 +329,6 @@ class InvoicePrinter:
         # FOOTER
         footer_text = f"Arrêtée la présente facture à la somme de: {total_words} ARIARY"
         footer_para = Paragraph(f"<b>{footer_text}</b>", styles['Normal'])
-        elements.append(footer_para)
-        elements.append(Spacer(1, 10))
-        elements.append(self._build_payment_mode_table(styles))
-        elements.append(Spacer(1, 24))
         
         # Zone de signature avec mentions en dessous des intitulés.
         sig_table = Table([
@@ -336,7 +348,13 @@ class InvoicePrinter:
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
             ('FONTSIZE', (0,0), (-1,-1), 9),
         ]))
-        elements.append(sig_table)
+        elements.append(KeepTogether([
+            footer_para,
+            Spacer(1, 10),
+            self._build_payment_mode_table(styles),
+            Spacer(1, 24),
+            sig_table,
+        ]))
         
         return elements
 

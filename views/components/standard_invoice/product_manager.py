@@ -331,6 +331,10 @@ class ProductManager(QWidget):
             return str(refs[0])
         return f"{refs[0]}-{refs[-1]}"
 
+    @staticmethod
+    def _default_ref_preview():
+        return "0"
+
     def add_product_row(self, pid, name, default_quantity, duration_days, ref, num_act, physico, toxico, micro, subtotal):
         row = self.product_table.rowCount()
         self.product_table.insertRow(row)
@@ -564,7 +568,8 @@ class ProductManager(QWidget):
             if duration_widget is not None:
                 self._set_line_edit_text(duration_widget, str(self._parse_positive_int(product.get("analysis_duration_days"), default=0, minimum=0)))
             if ref_widget is not None:
-                self._set_line_edit_text(ref_widget, self._format_ref_preview(self.selected_refs.get(pid) if self.selected_products.get(pid, False) else product["ref_b_analyse"]))
+                ref_value = self._format_ref_preview(self.selected_refs.get(pid)) if self.selected_products.get(pid, False) else self._default_ref_preview()
+                self._set_line_edit_text(ref_widget, ref_value)
             if num_act_widget is not None:
                 num_act_value = self.selected_num_acts.get(pid) if self.selected_products.get(pid, False) else ""
                 self._set_line_edit_text(num_act_widget, self._format_num_act_series(num_act_value))
@@ -1132,7 +1137,7 @@ class ProductManager(QWidget):
                 name = product['product_name']
                 default_quantity = 1
                 duration_days = product.get('analysis_duration_days') or 0
-                ref = product['ref_b_analyse']
+                ref = 0
                 num_act = ""
                 physico = product['physico']
                 toxico = product['toxico']

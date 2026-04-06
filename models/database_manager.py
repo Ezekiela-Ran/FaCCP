@@ -182,6 +182,27 @@ class DatabaseManager(Tables):
                     item_total,
                 ),
             )
+        if invoice_type == 'standard':
+            self._sync_ref_b_analyse_last(normalized_items)
+
+    def _sync_ref_b_analyse_last(self, line_items):
+        ref_values = []
+        for line in line_items or []:
+            ref_value = line.get("ref_b_analyse") if isinstance(line, dict) else None
+            if ref_value is None:
+                continue
+            try:
+                ref_values.append(int(ref_value))
+            except (TypeError, ValueError):
+                continue
+
+        if not ref_values:
+            return
+
+        highest_allocated_ref = max(ref_values)
+        current_last = self.get_max_ref_b_analyse()
+        if highest_allocated_ref > current_last:
+            self.set_setting("ref_b_analyse_last", highest_allocated_ref)
 
     def migrate_tables(self):
         # Migration pour ajouter les colonnes manquantes si elles n'existent pas

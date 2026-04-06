@@ -169,6 +169,7 @@ class Tables:
             CREATE TABLE IF NOT EXISTS products (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 product_name VARCHAR(255) NOT NULL,
+                analysis_duration_days INT NOT NULL DEFAULT 0,
                 ref_b_analyse INT NOT NULL,
                 num_act VARCHAR(191),
                 physico INT,
@@ -188,6 +189,7 @@ class Tables:
         CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             product_name TEXT NOT NULL,
+            analysis_duration_days INTEGER NOT NULL DEFAULT 0,
             ref_b_analyse INTEGER NOT NULL,
             num_act TEXT,
             physico INTEGER,
@@ -210,6 +212,7 @@ class Tables:
                 product_id INT NOT NULL,
                 ref_b_analyse INT NULL,
                 num_act VARCHAR(255) NULL,
+                result_date VARCHAR(32) NULL,
                 quantity INT DEFAULT 1,
                 physico DECIMAL(10,2) DEFAULT 0,
                 micro DECIMAL(10,2) DEFAULT 0,
@@ -229,6 +232,7 @@ class Tables:
             product_id INTEGER NOT NULL,
             ref_b_analyse INTEGER NULL,
             num_act TEXT NULL,
+            result_date TEXT NULL,
             quantity INTEGER DEFAULT 1,
             physico REAL DEFAULT 0,
             micro REAL DEFAULT 0,
@@ -263,6 +267,7 @@ class Tables:
                 date_commerce_modified TINYINT(1) NULL,
                 date_cert VARCHAR(32),
                 date_cert_modified TINYINT(1) NULL,
+                printed_at VARCHAR(32) NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE KEY uk_certificate_entry_scope (invoice_id, invoice_type, product_id, certificate_type),
                 FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
@@ -284,6 +289,7 @@ class Tables:
             num_cert TEXT,
             classe TEXT,
             date_production TEXT,
+            printed_at TEXT NULL,
             date_production_modified INTEGER,
             date_peremption TEXT,
             date_peremption_modified INTEGER,

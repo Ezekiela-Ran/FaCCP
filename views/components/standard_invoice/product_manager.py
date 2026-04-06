@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem, QTableWidgetItem, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QTableWidget, QAbstractItemView, QLineEdit, QLabel, QInputDialog, QMessageBox,
 )
 from PySide6.QtGui import QIntValidator, QColor
-from PySide6.QtCore import Qt, Signal, QTimer, QSignalBlocker
+from PySide6.QtCore import Qt, Signal, QTimer, QSignalBlocker, QDate
 from utils.path_utils import resolve_resource_path
 from views.foundation.globals import GlobalVariable
 
@@ -22,6 +22,8 @@ class ProductManager(QWidget):
         self.selection_order = []  # ordre de sélection pour numéroter dynamiquement
         self.selected_refs = {}  # dictionnaire {pid: ref_b_analyse} pour standard
         self.selected_num_acts = {}  # dictionnaire {pid: num_act} pour standard
+        self.selected_result_dates = {}  # dictionnaire {pid: yyyy-MM-dd} pour standard
+        self.product_analysis_durations = {}
         self.loaded_record_locked = False
         self.can_manage_catalog = GlobalVariable.is_admin()
         self.catalog_signature = None
@@ -74,10 +76,10 @@ class ProductManager(QWidget):
         self.product_table = QTableWidget()
         if self.invoice_type == "proforma":
             self.product_table.setColumnCount(8)
-            self.product_table.setHorizontalHeaderLabels(["Désignation", "Physico", "Toxico", "Micro", "Sous total", "Suppr", "Modif", "Choisir"])
+            self.product_table.setHorizontalHeaderLabels(["Désignation", "Physico", "Toxico", "Micro", "Sous-total", "Suppr", "Modif", "Choisir"])
         else:
             self.product_table.setColumnCount(10)
-            self.product_table.setHorizontalHeaderLabels(["Désignation", "Ref.b.analyse", "N°Acte", "Physico", "Toxico", "Micro", "Sous total", "Suppr", "Modif", "Choisir"])
+            self.product_table.setHorizontalHeaderLabels(["Désignation", "Ref.b.analyse", "N° Acte", "Physico", "Toxico", "Micro", "Sous-total", "Suppr", "Modif", "Choisir"])
         self.product_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         # Hide the reference column from the user but keep the widget so we can update it
         if self.invoice_type == "standard":
@@ -216,9 +218,41 @@ class ProductManager(QWidget):
             return
         tid = self.type_list.currentItem().data(Qt.UserRole)
         name, ok = QInputDialog.getText(self, "Nouveau Produit", "Nom du produit:")
-        if ok and name:
-            self.product_service.add_product(tid, name)
+        if not ok:
+            return
+        name = (name or "").strip()
+        if not name:
+            return
+        analysis_duration_days, duration_ok = QInputDialog.getInt(
+            self,
+            "Nouveau Produit",
+            "Durée d'analyse (jours):",
+            value=0,
+            minValue=0,
+            maxValue=3650,
+        )
+        if duration_ok:
+            self.product_service.add_product(tid, name, analysis_duration_days)
             self._after_local_catalog_change(selected_type_id=tid)
+
+    @staticmethod
+    def _compute_result_date_from_duration(duration_days):
+        try:
+            duration_value = max(int(duration_days or 0), 0)
+        except (TypeError, ValueError):
+            duration_value = 0
+        return QDate.currentDate().addDays(duration_value).toString("yyyy-MM-dd")
+
+    def _prompt_analysis_duration_days(self, pid):
+        current_value = int(self.product_analysis_durations.get(pid) or 0)
+        return QInputDialog.getInt(
+            self,
+            "Modifier le produit",
+            "Durée d'analyse (jours):",
+            value=current_value,
+            minValue=0,
+            maxValue=3650,
+        )
 
     def add_product_row(self, pid, name, ref, num_act, physico, toxico, micro, subtotal):
         row = self.product_table.rowCount()
@@ -360,8 +394,11 @@ class ProductManager(QWidget):
                 return
             if not self._save_designation_edit(row, pid):
                 return
+            analysis_duration_days, duration_ok = self._prompt_analysis_duration_days(pid)
+            if not duration_ok:
+                return
             self.on_price_component_changed(row)
-            self._persist_row_changes(row, pid)
+            self._persist_row_changes(row, pid, analysis_duration_days)
             btn.setText("Modifier")
             for col in amount_cols:
                 amount_widget = self.product_table.cellWidget(row, col)
@@ -425,7 +462,7 @@ class ProductManager(QWidget):
 
         self.catalog_signature = latest_signature
         self._reload_catalog_preserving_state()
-        self._show_catalog_notification("Le catalogue a ete mis a jour automatiquement.")
+        self._show_catalog_notification("Le catalogue a été mis à jour automatiquement.")
 
     def _mark_catalog_reload_pending(self, latest_signature=None):
         self.pending_catalog_reload = True
@@ -450,7 +487,8 @@ class ProductManager(QWidget):
             if ref_widget is not None:
                 self._set_line_edit_text(ref_widget, str(product["ref_b_analyse"] or 0))
             if num_act_widget is not None:
-                self._set_line_edit_text(num_act_widget, self.selected_num_acts.get(pid) or "")
+                num_act_value = self.selected_num_acts.get(pid) if self.selected_products.get(pid, False) else ""
+                self._set_line_edit_text(num_act_widget, self._display_num_act(num_act_value))
         else:
             physico_widget = self.product_table.cellWidget(row, 1)
             toxico_widget = self.product_table.cellWidget(row, 2)
@@ -462,7 +500,7 @@ class ProductManager(QWidget):
         self._set_line_edit_text(micro_widget, self.format_number(product["micro"]))
         self._set_line_edit_text(subtotal_widget, self.format_number(product["subtotal"]))
 
-    def _persist_row_changes(self, row, pid):
+    def _persist_row_changes(self, row, pid, analysis_duration_days=None):
         if self.invoice_type == "standard":
             physico_col = 3
             toxico_col = 4
@@ -499,7 +537,14 @@ class ProductManager(QWidget):
             micro,
             subtotal,
             update_ref=False,
+            analysis_duration_days=analysis_duration_days,
         )
+        if self.invoice_type == "standard" and not self.selected_products.get(pid, False):
+            num_act_widget = self.product_table.cellWidget(row, 2)
+            if num_act_widget is not None:
+                self._set_line_edit_text(num_act_widget, "")
+        if analysis_duration_days is not None:
+            self.product_analysis_durations[pid] = max(int(analysis_duration_days), 0)
         self.catalog_signature = self._safe_catalog_signature()
 
     def get_product_subtotal(self, product_id):
@@ -581,6 +626,22 @@ class ProductManager(QWidget):
         text = str(value or "").strip()
         return text or None
 
+    def _sync_visible_selected_num_acts(self):
+        if self.invoice_type != "standard":
+            return
+
+        for row in range(self.product_table.rowCount()):
+            item = self.product_table.item(row, 0)
+            if not item:
+                continue
+            pid = item.data(Qt.UserRole)
+            if pid is None or not self.selected_products.get(pid, False):
+                continue
+            num_act_widget = self.product_table.cellWidget(row, 2)
+            if num_act_widget is None:
+                continue
+            self.selected_num_acts[pid] = self._normalize_num_act(num_act_widget.text())
+
     def validate_num_act_row(self, row):
         if self.invoice_type != "standard":
             return True
@@ -590,6 +651,27 @@ class ProductManager(QWidget):
 
         num_act = self._normalize_num_act(num_act_widget.text())
         self._set_line_edit_text(num_act_widget, num_act or "")
+        if not num_act:
+            return True
+
+        current_item = self.product_table.item(row, 0)
+        current_pid = current_item.data(Qt.UserRole) if current_item else None
+        if current_pid is None or not self.selected_products.get(current_pid, False):
+            return True
+
+        self._sync_visible_selected_num_acts()
+        self.selected_num_acts[current_pid] = num_act
+
+        for other_pid, other_num_act in self.selected_num_acts.items():
+            if other_pid == current_pid or not self.selected_products.get(other_pid, False):
+                continue
+            if other_num_act and other_num_act == num_act and other_pid != current_pid:
+                QMessageBox.warning(
+                    self,
+                    "N° Acte déjà utilisé",
+                    f"Le N° Acte « {num_act} » est déjà utilisé par un autre produit dans cette facture.",
+                )
+                return False
         return True
 
     def set_loaded_record_locked(self, locked):
@@ -691,6 +773,7 @@ class ProductManager(QWidget):
                 num_act_widget = self.product_table.cellWidget(row, 2)
                 current_num_act = self._normalize_num_act(num_act_widget.text() if num_act_widget else "")
                 self.selected_num_acts[pid] = current_num_act
+                self.selected_result_dates[pid] = self._compute_result_date_from_duration(self.product_analysis_durations.get(pid, 0))
             self.apply_selection_style(row)
         else:
             # Deselect: unmark and remove from order
@@ -703,7 +786,13 @@ class ProductManager(QWidget):
                 del self.selected_refs[pid]
             if pid in self.selected_num_acts:
                 del self.selected_num_acts[pid]
+            if pid in self.selected_result_dates:
+                del self.selected_result_dates[pid]
             self.clear_selection_style(row)
+            if self.invoice_type == "standard":
+                num_act_widget = self.product_table.cellWidget(row, 2)
+                if num_act_widget is not None:
+                    self._set_line_edit_text(num_act_widget, "")
 
         # Refresh displayed refs for standard rows according to selected_refs mapping
         self._refresh_preview_refs()
@@ -826,11 +915,12 @@ class ProductManager(QWidget):
             if hasattr(form, 'date_input'):
                 form.date_input.setEnabled(True)
 
-    def select_products(self, product_ids, ref_mapping=None, num_act_mapping=None):
+    def select_products(self, product_ids, ref_mapping=None, num_act_mapping=None, result_date_mapping=None):
         # Select given products and maintain selection order.
         # For standard invoices, ref_mapping can restore previously saved refs.
         ref_mapping = ref_mapping or {}
         num_act_mapping = num_act_mapping or {}
+        result_date_mapping = result_date_mapping or {}
         for pid in product_ids:
             already_selected = self.selected_products.get(pid, False)
             if not already_selected:
@@ -842,6 +932,7 @@ class ProductManager(QWidget):
                 if existing_ref is not None:
                     self.selected_refs[pid] = int(existing_ref)
                 self.selected_num_acts[pid] = self._normalize_num_act(num_act_mapping.get(pid))
+                self.selected_result_dates[pid] = str(result_date_mapping.get(pid) or self._compute_result_date_from_duration(self.product_analysis_durations.get(pid, 0)) or "").strip()
             # Trouver la ligne et appliquer la sélection UI
             for row in range(self.product_table.rowCount()):
                 row_item = self.product_table.item(row, 0)
@@ -866,6 +957,7 @@ class ProductManager(QWidget):
 
     def load_products(self):
         self.product_table.setRowCount(0)
+        self.product_analysis_durations = {}
         if not self.type_list.currentItem():
             self.selection_changed.emit()
             return
@@ -883,6 +975,7 @@ class ProductManager(QWidget):
         else:
             for product in products:
                 pid = product['id']
+                self.product_analysis_durations[pid] = int(product.get('analysis_duration_days') or 0)
                 name = product['product_name']
                 ref = product['ref_b_analyse']
                 num_act = ""
@@ -920,7 +1013,7 @@ class ProductManager(QWidget):
 
         self.catalog_signature = latest_signature
         self._reload_catalog_preserving_state()
-        self._show_catalog_notification("Le catalogue a ete mis a jour automatiquement.")
+        self._show_catalog_notification("Le catalogue a été mis à jour automatiquement.")
 
     def _after_local_catalog_change(self, selected_type_id=None):
         if self._is_edit_active():
@@ -1003,6 +1096,7 @@ class ProductManager(QWidget):
         self.selection_order.clear()
         self.selected_refs.clear()
         self.selected_num_acts.clear()
+        self.selected_result_dates.clear()
 
         # Nettoyer l'UI des lignes visibles
         for row in range(self.product_table.rowCount()):
@@ -1031,19 +1125,19 @@ class ProductManager(QWidget):
             return {}
         selected_set = {pid for pid, selected in self.selected_products.items() if selected}
 
-        for row in range(self.product_table.rowCount()):
-            item = self.product_table.item(row, 0)
-            if not item:
-                continue
-            pid = item.data(Qt.UserRole)
-            if pid not in selected_set:
-                continue
-            num_act_widget = self.product_table.cellWidget(row, 2)
-            if num_act_widget is None:
-                continue
-            self.selected_num_acts[pid] = self._normalize_num_act(num_act_widget.text())
+        self._sync_visible_selected_num_acts()
 
         return {pid: self._normalize_num_act(num_act) for pid, num_act in self.selected_num_acts.items() if pid in selected_set}
+
+    def get_selected_result_date_mapping(self):
+        if self.invoice_type != "standard":
+            return {}
+        selected_set = {pid for pid, selected in self.selected_products.items() if selected}
+        return {
+            pid: str(result_date).strip()
+            for pid, result_date in self.selected_result_dates.items()
+            if pid in selected_set and str(result_date or "").strip()
+        }
 
     def _apply_stylesheet(self, stylesheet_path):
         try:

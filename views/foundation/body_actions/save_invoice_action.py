@@ -70,6 +70,7 @@ class SaveInvoiceAction:
         pm = body_layout.product_manager
         selected_refs = pm.get_selected_ref_mapping() if GlobalVariable.invoice_type == "standard" else {}
         selected_num_acts = pm.get_selected_num_act_mapping() if GlobalVariable.invoice_type == "standard" else {}
+        selected_result_dates = pm.get_selected_result_date_mapping() if GlobalVariable.invoice_type == "standard" else {}
         if GlobalVariable.invoice_type == "standard":
             if not body_layout.current_invoice_id:
                 selected_refs = SaveInvoiceAction._allocate_refs_for_save(body_layout, selected_products)
@@ -95,7 +96,7 @@ class SaveInvoiceAction:
                     first_name = first_product["product_name"] if first_product else str(first_pid)
                     second_name = second_product["product_name"] if second_product else str(pid)
                     errors.append(
-                        f"N°Acte dupliqué dans la facture: '{num_act}' est utilisé pour {first_name} et {second_name}."
+                        f"N° Acte dupliqué dans la facture: '{num_act}' est utilisé pour {first_name} et {second_name}."
                     )
                 else:
                     seen_num_act[num_act] = pid
@@ -131,6 +132,7 @@ class SaveInvoiceAction:
                     selected_products,
                     selected_refs,
                     selected_num_acts,
+                    selected_result_dates,
                 )
             else:
                 invoice_id = body_layout.invoice_service.save_standard_invoice(
@@ -146,6 +148,7 @@ class SaveInvoiceAction:
                     selected_products,
                     selected_refs,
                     selected_num_acts,
+                    selected_result_dates,
                 )
 
             if hasattr(form, "standard_invoice_number"):

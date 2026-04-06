@@ -76,6 +76,18 @@ class CertificatePrinter:
 
     def _extract_form_data(self, form) -> dict:
         """Lit les champs du formulaire client actif et échappe les valeurs HTML."""
+        if isinstance(form, dict):
+            return {
+                "company_name": escape(str(form.get("company_name") or "").strip()),
+                "responsable": escape(str(form.get("responsable") or "").strip()),
+                "stat": escape(str(form.get("stat") or "").strip()),
+                "nif": escape(str(form.get("nif") or "").strip()),
+                "address": escape(str(form.get("address") or "").strip()),
+                "date": escape(str(form.get("date") or "").strip()),
+                "date_result": escape(str(form.get("date_result") or "").strip()),
+                "product_ref": escape(str(form.get("product_ref") or "").strip()),
+            }
+
         if hasattr(form, "date_issue_input"):
             date_str = form.date_issue_input.date().toString("dd/MM/yyyy")
         elif hasattr(form, "date_input"):
@@ -647,7 +659,7 @@ class CertificatePrinter:
         dialog = QPrintDialog(printer, self.parent)
         dialog.setWindowTitle("Imprimer le certificat")
         if dialog.exec() != QPrintDialog.Accepted:
-            return
+            return False
 
         try:
             if printer.outputFormat() == QPrinter.OutputFormat.PdfFormat:
@@ -661,7 +673,7 @@ class CertificatePrinter:
                         "PDF Files (*.pdf)",
                     )
                     if not file_path:
-                        return
+                        return False
                 if not file_path.lower().endswith('.pdf'):
                     file_path += '.pdf'
 
@@ -671,7 +683,7 @@ class CertificatePrinter:
                     "PDF enregistré",
                     f"Certificat enregistré dans :\n{file_path}",
                 )
-                return
+                return True
 
             with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
                 tmp_path = tmp_file.name
@@ -679,6 +691,7 @@ class CertificatePrinter:
             try:
                 self._generate_pdf_with_reportlab(form, assignments, tmp_path)
                 self._print_pdf_to_printer(tmp_path, printer)
+                return True
             finally:
                 try:
                     os.remove(tmp_path)
@@ -686,3 +699,4 @@ class CertificatePrinter:
                     pass
         except Exception as e:
             QMessageBox.critical(self.parent, "Erreur", f"Erreur lors de l'impression du certificat : {e}")
+            return False

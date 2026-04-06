@@ -680,10 +680,58 @@ class CertificateDialog(QDialog):
     def _reset_certificate_cache(self, row: dict, cert_type: str):
         row["cached_entries"][cert_type] = self._default_entry_to_payload(row.get("base_defaults"))
 
+    def _restore_certificate_type_selection(self, row: dict, cert_type: str, payload: dict):
+        blockers = [QSignalBlocker(row["cc_cb"]), QSignalBlocker(row["cnc_cb"])]
+        try:
+            row["cc_cb"].setChecked(cert_type == "CC")
+            row["cnc_cb"].setChecked(cert_type == "CNC")
+        finally:
+            del blockers
+
+        row["active_cert_type"] = cert_type
+        row["cached_entries"][cert_type] = payload
+        self._load_row_values(row, payload)
+        self._set_row_action_state(row)
+
+    def _switch_numbered_certificate_type(self, row: dict, source_type: str, target_type: str) -> bool:
+        source_payload = self._snapshot_row_values(row, source_type)
+        row["cached_entries"][source_type] = source_payload
+        try:
+            migrated_payload = self.db_manager.switch_certificate_entry_type(
+                self.invoice_id,
+                self.invoice_type,
+                row["pid"],
+                source_type,
+                target_type,
+                source_payload,
+            )
+        except Exception as exc:
+            self._restore_certificate_type_selection(row, source_type, source_payload)
+            QMessageBox.critical(
+                self,
+                "Changement de type impossible",
+                f"Le certificat « {row['name']} » n'a pas pu être basculé de {source_type} vers {target_type}.\n\n{exc}",
+            )
+            return False
+
+        self._reset_certificate_cache(row, source_type)
+        row["active_cert_type"] = target_type
+        row["cached_entries"][target_type] = migrated_payload
+        self._load_row_values(row, migrated_payload)
+        self._last_entries_signature = ()
+        self._set_row_action_state(row)
+        if self._refresh_pending:
+            self.refresh_certificate_entries_silently()
+        return True
+
     def _on_certificate_type_selected(self, row_index: int, cert_type: str):
         row = self._rows[row_index]
         previous_type = row.get("active_cert_type")
         if previous_type and previous_type != cert_type:
+            previous_payload = self._snapshot_row_values(row, previous_type)
+            if str(previous_payload.get("num_cert") or "").strip():
+                self._switch_numbered_certificate_type(row, previous_type, cert_type)
+                return
             self._reset_certificate_cache(row, previous_type)
 
         row["active_cert_type"] = cert_type
@@ -734,7 +782,8 @@ class CertificateDialog(QDialog):
             "Enregistrer le certificat",
             (
                 f"Voulez-vous vraiment enregistrer le certificat {cert_type} pour « {row['name']} » ?\n\n"
-                "Le N° certificat sera attribué automatiquement et ne pourra plus être modifié ensuite."
+                "Le N° certificat sera attribué automatiquement. Si vous changez plus tard entre CC et CNC, "
+                "la numérotation sera réajustée automatiquement pour garder une suite cohérente."
             ),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,

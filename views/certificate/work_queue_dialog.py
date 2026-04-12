@@ -153,9 +153,9 @@ class CertificateWorkQueueDialog(QDialog):
         toolbar = QHBoxLayout()
         toolbar.setSpacing(8)
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("Filtrer résultat (ex: 12/04)")
+        self.search_edit.setPlaceholderText("Filtrer résultat ou type (ex: 12/04, CC)")
         self.search_edit.setMaximumWidth(240)
-        self.search_edit.setToolTip("Filtrer par date de résultat")
+        self.search_edit.setToolTip("Filtrer par date de résultat ou type de certificat")
         self.search_edit.textChanged.connect(self._on_search_text_changed)
         toolbar.addWidget(self.search_edit, 0)
         toolbar.addStretch(1)
@@ -289,14 +289,21 @@ class CertificateWorkQueueDialog(QDialog):
             "product_ref": str(source.get("product_ref") or "").strip(),
         }
 
+    def _source_search_values(self, source: dict) -> tuple[str, ...]:
+        result_date = str(source.get("result_date") or "").strip()
+        active_type = str(source.get("active_certificate_type") or "").strip().upper()
+        return (
+            result_date.lower(),
+            self._format_iso_date(result_date).lower(),
+            active_type.lower(),
+        )
+
     def _filter_sources(self, sources: list[dict]) -> list[dict]:
         if not self._search_text:
             return sources
         filtered = []
         for source in sources:
-            raw_value = str(source.get("result_date") or "").strip().lower()
-            display_value = self._format_iso_date(source.get("result_date")).lower()
-            if self._search_text in raw_value or self._search_text in display_value:
+            if any(self._search_text in value for value in self._source_search_values(source) if value):
                 filtered.append(source)
         return filtered
 

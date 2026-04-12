@@ -147,11 +147,11 @@ class ProductManager(QWidget):
         self.catalog_refresh_timer.start()
 
     def _apply_role_permissions(self):
-        self.add_type_btn.setVisible(self.can_manage_catalog)
-        self.edit_type_btn.setVisible(self.can_manage_catalog)
-        self.del_type_btn.setVisible(self.can_manage_catalog)
-        self.add_product_btn.setVisible(self.can_manage_catalog)
-        self.product_table.setColumnHidden(self._col("delete"), not self.can_manage_catalog)
+        self.add_type_btn.setVisible(self._can_manage_types())
+        self.edit_type_btn.setVisible(self._can_manage_types())
+        self.del_type_btn.setVisible(self._can_manage_types())
+        self.add_product_btn.setVisible(self._can_manage_product_catalog())
+        self.product_table.setColumnHidden(self._col("delete"), not self._can_manage_product_catalog())
         self.product_table.setColumnHidden(self._col("edit"), not self._can_use_row_edit())
 
     def _col(self, name):
@@ -161,6 +161,15 @@ class ProductManager(QWidget):
 
     def _has_duration_column(self):
         return self.invoice_type == "standard"
+
+    def _catalog_management_locked(self):
+        return self.invoice_type == "proforma"
+
+    def _can_manage_types(self):
+        return self.can_manage_catalog and not self._catalog_management_locked()
+
+    def _can_manage_product_catalog(self):
+        return self.can_manage_catalog and not self._catalog_management_locked()
 
     def _can_use_row_edit(self):
         return self.can_manage_catalog or self.invoice_type == "proforma"
@@ -244,7 +253,7 @@ class ProductManager(QWidget):
         return False
 
     def add_type(self):
-        if not self.can_manage_catalog:
+        if not self._can_manage_types():
             return
         name, ok = QInputDialog.getText(self, "Nouveau Type", "Nom du type:")
         if ok and name:
@@ -252,7 +261,7 @@ class ProductManager(QWidget):
             self._after_local_catalog_change(selected_type_id=new_type_id)
 
     def edit_type(self):
-        if not self.can_manage_catalog:
+        if not self._can_manage_types():
             return
         item = self.type_list.currentItem()
         if not item:
@@ -268,7 +277,7 @@ class ProductManager(QWidget):
             self._after_local_catalog_change(selected_type_id=tid)
 
     def del_type(self):
-        if not self.can_manage_catalog:
+        if not self._can_manage_types():
             return
         item = self.type_list.currentItem()
         if not item:
@@ -282,7 +291,7 @@ class ProductManager(QWidget):
             QMessageBox.warning(self, "Suppression impossible", str(e))
 
     def add_product(self):
-        if not self.can_manage_catalog:
+        if not self._can_manage_product_catalog():
             return
         if self.loaded_record_locked:
             return
@@ -528,6 +537,10 @@ class ProductManager(QWidget):
         editable_cols = self._editable_row_columns()
         amount_cols = [self._col("physico"), self._col("toxico"), self._col("micro")]
         btn = self.product_table.cellWidget(row, self._col("edit"))
+
+        if self.invoice_type == "standard" and self._should_auto_select_standard_row(row, pid):
+            self._select_row_for_invoice(pid, row)
+            self._refresh_preview_refs()
 
         if self.invoice_type == "standard" and not self.validate_num_act_row(row):
             self.product_table.cellWidget(row, self._col("num_act")).setFocus()
@@ -877,7 +890,7 @@ class ProductManager(QWidget):
 
     def set_loaded_record_locked(self, locked):
         self.loaded_record_locked = bool(locked)
-        self.add_product_btn.setEnabled(self.can_manage_catalog and not self.loaded_record_locked)
+        self.add_product_btn.setEnabled(self._can_manage_product_catalog() and not self.loaded_record_locked)
         for row in range(self.product_table.rowCount()):
             self._update_row_action_state(row)
 
@@ -889,14 +902,14 @@ class ProductManager(QWidget):
         btn_mod = self.product_table.cellWidget(row, btn_mod_col)
         btn_sel = self.product_table.cellWidget(row, btn_sel_col)
         if btn_del:
-            btn_del.setEnabled(self.can_manage_catalog and not self.loaded_record_locked)
+            btn_del.setEnabled(self._can_manage_product_catalog() and not self.loaded_record_locked)
         if btn_mod:
             btn_mod.setEnabled(self._can_use_row_edit())
         if btn_sel:
             btn_sel.setEnabled(not self.loaded_record_locked)
 
     def delete_product_row(self, pid, row):
-        if not self.can_manage_catalog:
+        if not self._can_manage_product_catalog():
             return
         if self.loaded_record_locked:
             return
@@ -958,6 +971,35 @@ class ProductManager(QWidget):
         if self.selected_products.get(pid, False):
             self.selection_changed.emit()
 
+    def _select_row_for_invoice(self, pid, row):
+        btn = self.product_table.cellWidget(row, self._col("select"))
+        if btn:
+            btn.setText("Annuler")
+        self.selected_products[pid] = True
+        if pid not in self.selection_order:
+            self.selection_order.append(pid)
+        quantity_widget = self.product_table.cellWidget(row, self._col("quantity"))
+        self.selected_quantities[pid] = self._parse_positive_int(quantity_widget.text() if quantity_widget else 1, default=1, minimum=1)
+        if self.invoice_type == "standard":
+            duration_widget = self.product_table.cellWidget(row, self._col("duration"))
+            num_act_widget = self.product_table.cellWidget(row, self._col("num_act"))
+            current_num_act = str(num_act_widget.text() if num_act_widget else "").strip()
+            self.selected_num_acts[pid] = current_num_act
+            self.selected_result_dates[pid] = self._compute_result_date_from_duration(
+                self._parse_positive_int(duration_widget.text() if duration_widget else self.product_analysis_durations.get(pid, 0), default=0, minimum=0)
+            )
+        self.apply_selection_style(row)
+
+    def _should_auto_select_standard_row(self, row, pid):
+        if self.invoice_type != "standard":
+            return False
+        if self.selected_products.get(pid, False):
+            return False
+        num_act_widget = self.product_table.cellWidget(row, self._col("num_act"))
+        if num_act_widget is None:
+            return False
+        return bool(str(num_act_widget.text()).strip())
+
     def toggle_select(self, pid, row):
         if self.loaded_record_locked:
             return
@@ -967,20 +1009,7 @@ class ProductManager(QWidget):
 
         if not currently_selected:
             # Select: mark and append to order
-            if btn:
-                btn.setText("Annuler")
-            self.selected_products[pid] = True
-            if pid not in self.selection_order:
-                self.selection_order.append(pid)
-            quantity_widget = self.product_table.cellWidget(row, self._col("quantity"))
-            self.selected_quantities[pid] = self._parse_positive_int(quantity_widget.text() if quantity_widget else 1, default=1, minimum=1)
-            if self.invoice_type == "standard":
-                duration_widget = self.product_table.cellWidget(row, self._col("duration"))
-                num_act_widget = self.product_table.cellWidget(row, self._col("num_act"))
-                current_num_act = str(num_act_widget.text() if num_act_widget else "").strip()
-                self.selected_num_acts[pid] = current_num_act
-                self.selected_result_dates[pid] = self._compute_result_date_from_duration(self._parse_positive_int(duration_widget.text() if duration_widget else self.product_analysis_durations.get(pid, 0), default=0, minimum=0))
-            self.apply_selection_style(row)
+            self._select_row_for_invoice(pid, row)
         else:
             # Deselect: unmark and remove from order
             if btn:

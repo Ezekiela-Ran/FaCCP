@@ -1039,6 +1039,11 @@ class DatabaseManager(Tables):
                     "UPDATE products SET ref_b_analyse=%s WHERE id=%s",
                     (ref, product_id)
                 )
+            if num_act is not None:
+                self.cursor.execute(
+                    "UPDATE products SET num_act=%s WHERE id=%s",
+                    (self._normalize_num_act(num_act), product_id)
+                )
             if analysis_duration_days is not None:
                 try:
                     duration_value = max(int(analysis_duration_days or 0), 0)

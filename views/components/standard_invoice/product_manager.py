@@ -722,10 +722,6 @@ class ProductManager(QWidget):
         )
         if analysis_duration_days is not None:
             self.product_analysis_durations[pid] = max(int(analysis_duration_days), 0)
-        if self.invoice_type == "standard" and not self.selected_products.get(pid, False):
-            num_act_widget = self.product_table.cellWidget(row, self._col("num_act"))
-            if num_act_widget is not None:
-                self._set_line_edit_text(num_act_widget, "")
         self.catalog_signature = self._safe_catalog_signature()
 
     def get_product_subtotal(self, product_id):

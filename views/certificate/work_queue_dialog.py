@@ -59,7 +59,7 @@ _HEADERS = [
     "Classe *",
     "Date de production",
     "Date de péremption",
-    "N° PRL",
+    "Sigle",
     "Date commerce",
     "Date cert *",
     "Actions",
@@ -498,7 +498,7 @@ class CertificateWorkQueueDialog(QDialog):
         classe_edit = self._make_line_edit("Classe", 62)
         date_prod_edit = self._make_date_edit()
         date_peremp_edit = self._make_date_edit()
-        num_prelev_edit = self._make_line_edit("PRL", 62)
+        num_prelev_edit = self._make_line_edit("Sigle", 62)
         date_pv_edit = self._make_date_edit()
         date_cert_edit = self._make_date_edit()
 

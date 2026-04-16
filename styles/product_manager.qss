@@ -19,7 +19,7 @@ QPushButton#categoryActionButton:hover {
 QPushButton#rowActionButton {
     background-color: #2F5A8F;
     color: white;
-    padding: 3px 8px;
+    padding: 3px 15px;
     border: none;
     border-radius: 3px;
 }

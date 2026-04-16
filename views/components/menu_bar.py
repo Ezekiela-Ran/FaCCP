@@ -24,7 +24,7 @@ class MenuBar(QtWidgets.QMenuBar):
         logout_action.triggered.connect(lambda: self.parent.menubar_click_logout())
 
         if GlobalVariable.is_admin():
-            init_counters_action = self.file_menu.addAction("Initialiser facture et Ref.b.analyse")
+            init_counters_action = self.file_menu.addAction("Initialiser les numéros")
             init_counters_action.triggered.connect(lambda: self.parent.menubar_click_initialize_counters())
 
             reset_action = self.file_menu.addAction("Réinitialisation")
